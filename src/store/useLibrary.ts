@@ -1,9 +1,12 @@
 import { create } from 'zustand';
 
+import { fetchSeries, SeriesSearchResult } from '~/src/api/anilist';
+import { getCached, setCached } from '~/src/db/cache';
 import { openDatabase } from '~/src/db/expoClient';
-import { Series, Volume, VolumeStatus } from '~/src/db/models';
+import { NewSeries, Series, Volume, VolumeStatus } from '~/src/db/models';
 import {
   deleteVolume,
+  insertSeries,
   insertVolume,
   listSeries,
   listVolumes,
@@ -15,14 +18,22 @@ interface LibraryState {
   series: Series[];
   volumesBySeriesId: Record<number, Volume[]>;
   loaded: boolean;
+  searchResults: SeriesSearchResult[];
+  searching: boolean;
+  searchError: string | null;
   load: () => Promise<void>;
   cycleVolume: (seriesId: number, number: number) => Promise<void>;
+  search: (query: string) => Promise<void>;
+  addSeries: (input: NewSeries) => Promise<number>;
 }
 
 export const useLibrary = create<LibraryState>()((set, get) => ({
   series: [],
   volumesBySeriesId: {},
   loaded: false,
+  searchResults: [],
+  searching: false,
+  searchError: null,
 
   load: async () => {
     const db = await openDatabase();
@@ -82,5 +93,42 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     }
 
     set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: updated } });
+  },
+
+  search: async (query) => {
+    const q = query.trim();
+    if (!q) {
+      set({ searchResults: [], searchError: null, searching: false });
+      return;
+    }
+    set({ searching: true, searchError: null });
+    try {
+      const db = await openDatabase();
+      const key = `anilist:search:${q.toLowerCase()}`;
+      const cached = await getCached(db, key);
+      let results: SeriesSearchResult[];
+      if (cached) {
+        results = JSON.parse(cached) as SeriesSearchResult[];
+      } else {
+        results = await fetchSeries(q);
+        await setCached(db, key, JSON.stringify(results));
+      }
+      set({ searchResults: results, searching: false });
+    } catch {
+      set({ searching: false, searchError: 'Recherche échouée', searchResults: [] });
+    }
+  },
+
+  addSeries: async (input) => {
+    const db = await openDatabase();
+    const id = await insertSeries(db, input);
+    const series = [...get().series, { id, ...input }].sort((a, b) =>
+      a.title.localeCompare(b.title),
+    );
+    set({
+      series,
+      volumesBySeriesId: { ...get().volumesBySeriesId, [id]: [] },
+    });
+    return id;
   },
 }));

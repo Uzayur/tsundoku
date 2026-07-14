@@ -1,5 +1,7 @@
+import { router } from 'expo-router';
 import { FlatList, StyleSheet, Text } from 'react-native';
 
+import { Fab } from '~/src/components/ui/Fab';
 import { Screen } from '~/src/components/ui/Screen';
 import { ScreenHeader } from '~/src/components/ui/ScreenHeader';
 import { SeriesCard } from '~/src/components/ui/SeriesCard';
@@ -25,6 +27,7 @@ export default function CollectionScreen() {
         contentContainerStyle={styles.content}
         ListEmptyComponent={<Text style={styles.empty}>Aucune série pour l’instant</Text>}
       />
+      <Fab onPress={() => router.push('/add')} />
     </Screen>
   );
 }
