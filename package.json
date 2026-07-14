@@ -22,12 +22,17 @@
     "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
+    "better-sqlite3": "^12.11.1",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
+    "jest": "^29.7.0",
     "prettier": "^3.9.5",
+    "ts-jest": "^29.4.11",
     "typescript": "~5.9.2"
   },
   "scripts": {
@@ -37,7 +42,8 @@
     "web": "expo start --web",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "test": "jest"
   },
   "private": true
 }
