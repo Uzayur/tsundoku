@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { fetchSeries, SeriesSearchResult } from '~/src/api/anilist';
+import { BackupData } from '~/src/lib/backup';
 import { getCached, setCached } from '~/src/db/cache';
 import { openDatabase } from '~/src/db/expoClient';
 import { NewSeries, Series, Volume, VolumeStatus } from '~/src/db/models';
@@ -26,6 +27,7 @@ interface LibraryState {
   cycleVolume: (seriesId: number, number: number) => Promise<void>;
   search: (query: string) => Promise<void>;
   addSeries: (input: NewSeries) => Promise<number>;
+  importBackup: (data: BackupData) => Promise<void>;
 }
 
 export const useLibrary = create<LibraryState>()((set, get) => ({
@@ -134,5 +136,37 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
       volumesBySeriesId: { ...get().volumesBySeriesId, [id]: [] },
     });
     return id;
+  },
+
+  importBackup: async (data) => {
+    const db = await openDatabase();
+    // Replace-all restore (device migration semantics).
+    await db.exec('DELETE FROM volumes; DELETE FROM series;');
+    for (const s of data.series) {
+      const newId = await insertSeries(db, {
+        title: s.title,
+        type: s.type,
+        totalVolumes: s.totalVolumes,
+        externalIds: s.externalIds,
+        coverUrl: s.coverUrl,
+        genres: s.genres,
+        status: s.status,
+      });
+      for (const v of data.volumesBySeriesId[s.id] ?? []) {
+        await insertVolume(db, {
+          seriesId: newId,
+          number: v.number,
+          isbn: v.isbn,
+          title: v.title,
+          pageCount: v.pageCount,
+          coverUrl: v.coverUrl,
+          status: v.status,
+          currentPage: v.currentPage,
+          startedAt: v.startedAt,
+          finishedAt: v.finishedAt,
+        });
+      }
+    }
+    await get().load();
   },
 }));

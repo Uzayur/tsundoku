@@ -1,4 +1,6 @@
-import { FlatList, StyleSheet, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 
 import { Screen } from '~/src/components/ui/Screen';
 import { ScreenHeader } from '~/src/components/ui/ScreenHeader';
@@ -21,7 +23,17 @@ export default function AccueilScreen() {
       <FlatList
         data={inProgress}
         keyExtractor={(item) => String(item.id)}
-        ListHeaderComponent={<ScreenHeader title="Accueil" subtitle="Lectures en cours" />}
+        ListHeaderComponent={
+          <ScreenHeader
+            title="Accueil"
+            subtitle="Lectures en cours"
+            right={
+              <Pressable onPress={() => router.push('/settings')} hitSlop={12}>
+                <Ionicons name="settings-outline" size={22} color={theme.ink} />
+              </Pressable>
+            }
+          />
+        }
         renderItem={({ item }) => (
           <SeriesCard series={item} readCount={readCount(volumesBySeriesId[item.id] ?? [])} />
         )}
