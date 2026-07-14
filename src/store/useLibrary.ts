@@ -5,17 +5,38 @@ import { BookMetadata } from '~/src/api/isbn';
 import { BackupData } from '~/src/lib/backup';
 import { getCached, setCached } from '~/src/db/cache';
 import { openDatabase } from '~/src/db/expoClient';
-import { NewSeries, Series, Volume, VolumeStatus } from '~/src/db/models';
+import { NewSeries, Series, SeriesType, Volume, VolumeStatus } from '~/src/db/models';
 import {
+  deleteSeries,
   deleteVolume,
   insertSeries,
   insertVolume,
   listSeries,
   listVolumes,
+  setVolumeCurrentPage,
   setVolumeFinishedAt,
   setVolumeStatus,
+  updateSeries,
 } from '~/src/db/queries';
-import { nextStatus, SlotState } from '~/src/lib/volumeStatus';
+import { SlotState } from '~/src/lib/volumeStatus';
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+function newVolume(seriesId: number, number: number, status: VolumeStatus): Volume {
+  return {
+    id: 0,
+    seriesId,
+    number,
+    isbn: null,
+    title: null,
+    pageCount: null,
+    coverUrl: null,
+    status,
+    currentPage: null,
+    startedAt: null,
+    finishedAt: status === 'read' ? today() : null,
+  };
+}
 
 interface LibraryState {
   series: Series[];
@@ -25,10 +46,18 @@ interface LibraryState {
   searching: boolean;
   searchError: string | null;
   load: () => Promise<void>;
-  cycleVolume: (seriesId: number, number: number) => Promise<void>;
+  setVolumeState: (
+    seriesId: number,
+    number: number,
+    target: SlotState,
+    applyToPrevious?: boolean,
+  ) => Promise<void>;
+  setVolumeCurrentPage: (seriesId: number, number: number, page: number) => Promise<void>;
   search: (query: string) => Promise<void>;
   addSeries: (input: NewSeries) => Promise<number>;
   addBook: (meta: BookMetadata) => Promise<number>;
+  updateSeriesType: (id: number, type: SeriesType) => Promise<void>;
+  removeSeries: (id: number) => Promise<void>;
   importBackup: (data: BackupData) => Promise<void>;
 }
 
@@ -50,57 +79,56 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     set({ series, volumesBySeriesId: map, loaded: true });
   },
 
-  cycleVolume: async (seriesId, number) => {
+  // Set a specific tome to a target state (create / update / delete as needed).
+  // When applyToPrevious is true, apply the same target to every tome 1..number.
+  setVolumeState: async (seriesId, number, target, applyToPrevious = false) => {
     const db = await openDatabase();
-    const volumes = get().volumesBySeriesId[seriesId] ?? [];
-    const existing = volumes.find((v) => v.number === number);
-    const current: SlotState = existing ? existing.status : 'missing';
-    const next = nextStatus(current);
+    const numbers = applyToPrevious ? Array.from({ length: number }, (_, i) => i + 1) : [number];
+    let volumes = [...(get().volumesBySeriesId[seriesId] ?? [])];
 
-    let updated: Volume[];
-    if (!existing) {
-      const status = next as VolumeStatus;
-      const id = await insertVolume(db, {
-        seriesId,
-        number,
-        isbn: null,
-        title: null,
-        pageCount: null,
-        coverUrl: null,
-        status,
-        currentPage: null,
-        startedAt: null,
-        finishedAt: null,
-      });
-      updated = [
-        ...volumes,
-        {
-          id,
-          seriesId,
-          number,
-          isbn: null,
-          title: null,
-          pageCount: null,
-          coverUrl: null,
-          status,
-          currentPage: null,
-          startedAt: null,
-          finishedAt: null,
-        },
-      ].sort((a, b) => a.number - b.number);
-    } else if (next === 'missing') {
-      await deleteVolume(db, existing.id);
-      updated = volumes.filter((v) => v.id !== existing.id);
-    } else {
-      const status = next as VolumeStatus;
-      await setVolumeStatus(db, existing.id, status);
-      // Stamp/clear the finished date so stats can bucket read volumes by period.
-      const finishedAt = status === 'read' ? new Date().toISOString().slice(0, 10) : null;
-      await setVolumeFinishedAt(db, existing.id, finishedAt);
-      updated = volumes.map((v) => (v.id === existing.id ? { ...v, status, finishedAt } : v));
+    for (const n of numbers) {
+      const existing = volumes.find((v) => v.number === n);
+      if (target === 'missing') {
+        if (existing) {
+          await deleteVolume(db, existing.id);
+          volumes = volumes.filter((v) => v.id !== existing.id);
+        }
+        continue;
+      }
+      const status = target as VolumeStatus;
+      const finishedAt = status === 'read' ? today() : null;
+      if (existing) {
+        await setVolumeStatus(db, existing.id, status);
+        await setVolumeFinishedAt(db, existing.id, finishedAt);
+        volumes = volumes.map((v) => (v.id === existing.id ? { ...v, status, finishedAt } : v));
+      } else {
+        const draft = newVolume(seriesId, n, status);
+        const id = await insertVolume(db, draft);
+        volumes = [...volumes, { ...draft, id }];
+      }
     }
 
-    set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: updated } });
+    volumes.sort((a, b) => a.number - b.number);
+    set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: volumes } });
+  },
+
+  setVolumeCurrentPage: async (seriesId, number, page) => {
+    const db = await openDatabase();
+    let volumes = [...(get().volumesBySeriesId[seriesId] ?? [])];
+    const existing = volumes.find((v) => v.number === number);
+    if (existing) {
+      await setVolumeStatus(db, existing.id, 'reading');
+      await setVolumeCurrentPage(db, existing.id, page);
+      volumes = volumes.map((v) =>
+        v.id === existing.id ? { ...v, status: 'reading', currentPage: page } : v,
+      );
+    } else {
+      const draft: Volume = { ...newVolume(seriesId, number, 'reading'), currentPage: page };
+      const id = await insertVolume(db, draft);
+      volumes = [...volumes, { ...draft, id }];
+    }
+    volumes.sort((a, b) => a.number - b.number);
+    set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: volumes } });
   },
 
   search: async (query) => {
@@ -145,7 +173,9 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const seriesId = await insertSeries(db, {
       title: meta.title ?? meta.isbn,
       author: meta.authors[0] ?? null,
-      type: 'manga',
+      // ISBN scans have no reliable manga/novel signal; default to novel and let
+      // the user correct it on the series page. (Manga are usually added via search.)
+      type: 'novel',
       totalVolumes: 1,
       externalIds: {},
       coverUrl: meta.coverUrl,
@@ -166,6 +196,20 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     });
     await get().load();
     return seriesId;
+  },
+
+  updateSeriesType: async (id, type) => {
+    const db = await openDatabase();
+    await updateSeries(db, id, { type });
+    set({ series: get().series.map((s) => (s.id === id ? { ...s, type } : s)) });
+  },
+
+  removeSeries: async (id) => {
+    const db = await openDatabase();
+    await deleteSeries(db, id);
+    const rest = { ...get().volumesBySeriesId };
+    delete rest[id];
+    set({ series: get().series.filter((s) => s.id !== id), volumesBySeriesId: rest });
   },
 
   importBackup: async (data) => {

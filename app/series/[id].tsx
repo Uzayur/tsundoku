@@ -1,12 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Badge } from '~/src/components/ui/Badge';
 import { Cover } from '~/src/components/ui/Cover';
+import { OptionsSheet } from '~/src/components/ui/OptionsSheet';
 import { ProgressBar } from '~/src/components/ui/ProgressBar';
 import { VolumeCell } from '~/src/components/ui/VolumeCell';
-import { SeriesStatus } from '~/src/db/models';
+import { VolumeSheet } from '~/src/components/ui/VolumeSheet';
+import { SeriesStatus, SeriesType } from '~/src/db/models';
 import { progressFraction, readCount } from '~/src/lib/progress';
 import { LEGEND_STATES, SlotState, STATUS_LABEL, STATUS_STYLE } from '~/src/lib/volumeStatus';
 import { useLibrary } from '~/src/store/useLibrary';
@@ -20,6 +32,14 @@ const SERIES_STATUS_LABEL: Record<SeriesStatus, string> = {
   dropped: 'Abandonné',
 };
 
+const TYPE_LABEL: Record<SeriesType, string> = {
+  manga: 'Manga',
+  novel: 'Roman',
+  bd: 'BD',
+  comic: 'Comics',
+};
+const TYPES: SeriesType[] = ['manga', 'novel', 'bd', 'comic'];
+
 const GRID_COLUMNS = 5;
 const GRID_GAP = 9;
 
@@ -31,7 +51,26 @@ export default function SeriesDetailScreen() {
 
   const series = useLibrary((s) => s.series.find((x) => x.id === seriesId));
   const volumes = useLibrary((s) => s.volumesBySeriesId[seriesId] ?? []);
-  const cycleVolume = useLibrary((s) => s.cycleVolume);
+  const setVolumeState = useLibrary((s) => s.setVolumeState);
+  const setVolumeCurrentPage = useLibrary((s) => s.setVolumeCurrentPage);
+  const updateSeriesType = useLibrary((s) => s.updateSeriesType);
+  const removeSeries = useLibrary((s) => s.removeSeries);
+
+  const [sheetTome, setSheetTome] = useState<number | null>(null);
+  const [typeOpen, setTypeOpen] = useState(false);
+
+  const onDelete = () => {
+    Alert.alert('Supprimer la série ?', 'Cette action est irréversible.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: () => {
+          removeSeries(seriesId).then(() => router.back());
+        },
+      },
+    ]);
+  };
 
   if (!series) {
     return (
@@ -50,17 +89,31 @@ export default function SeriesDetailScreen() {
   const stateFor = (n: number): SlotState =>
     volumes.find((v) => v.number === n)?.status ?? 'missing';
 
-  const cellWidth = (width - theme.spacing.lg * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+  const cellWidth = (width - theme.screenPadX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+
+  const sheetVolume = sheetTome != null ? volumes.find((v) => v.number === sheetTome) : undefined;
+  const sheetSubtitle =
+    sheetTome == null
+      ? undefined
+      : sheetVolume
+        ? `${STATUS_LABEL[sheetVolume.status]}${
+            sheetVolume.currentPage ? ` · page ${sheetVolume.currentPage}` : ''
+          }`
+        : STATUS_LABEL.missing;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header onBack={() => router.back()} />
+      <Header onBack={() => router.back()} onDelete={onDelete} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
           <Cover title={series.title} seed={series.id} coverUrl={series.coverUrl} size="lg" />
           <View style={styles.heroBody}>
             <Text style={styles.heroTitle}>{series.title}</Text>
-            <Text style={styles.heroSub}>{series.type}</Text>
+            {series.author ? <Text style={styles.heroAuthor}>{series.author}</Text> : null}
+            <Pressable style={styles.typeRow} onPress={() => setTypeOpen(true)} hitSlop={8}>
+              <Text style={styles.heroType}>{TYPE_LABEL[series.type]}</Text>
+              <Ionicons name="chevron-down" size={14} color={theme.muted} />
+            </Pressable>
             <View style={styles.badges}>
               <Badge label={SERIES_STATUS_LABEL[series.status]} tone="reading" />
               <Badge label={`${ownedCount} possédés`} tone="owned" />
@@ -91,7 +144,7 @@ export default function SeriesDetailScreen() {
               number={n}
               state={stateFor(n)}
               width={cellWidth}
-              onPress={() => cycleVolume(seriesId, n)}
+              onPress={() => setSheetTome(n)}
             />
           ))}
         </View>
@@ -115,66 +168,72 @@ export default function SeriesDetailScreen() {
           ))}
         </View>
 
-        <Text style={styles.note}>
-          Touche un tome pour changer son statut (manquant → wishlist → possédé → lu).
-        </Text>
+        <Text style={styles.note}>Touche un tome pour choisir son statut.</Text>
       </ScrollView>
+
+      <VolumeSheet
+        visible={sheetTome != null}
+        number={sheetTome ?? 0}
+        subtitle={sheetSubtitle}
+        onClose={() => setSheetTome(null)}
+        onSelect={(target, applyToPrevious) => {
+          if (sheetTome != null) setVolumeState(seriesId, sheetTome, target, applyToPrevious);
+          setSheetTome(null);
+        }}
+        onSetPage={(page) => {
+          if (sheetTome != null) setVolumeCurrentPage(seriesId, sheetTome, page);
+          setSheetTome(null);
+        }}
+      />
+
+      <OptionsSheet
+        visible={typeOpen}
+        title="Type de série"
+        onClose={() => setTypeOpen(false)}
+        options={TYPES.map((t) => ({
+          label: TYPE_LABEL[t],
+          onPress: () => updateSeriesType(seriesId, t),
+        }))}
+      />
     </View>
   );
 }
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header({ onBack, onDelete }: { onBack: () => void; onDelete?: () => void }) {
   return (
-    <Pressable style={styles.backlink} onPress={onBack} hitSlop={12}>
-      <Ionicons name="chevron-back" size={20} color={theme.muted} />
-      <Text style={styles.backText}>Retour</Text>
-    </Pressable>
-  );
-}
-
-function Badge({ label, tone }: { label: string; tone: 'reading' | 'owned' }) {
-  return (
-    <View style={[styles.badge, tone === 'owned' ? styles.badgeOwned : styles.badgeReading]}>
-      <Text
-        style={[
-          styles.badgeText,
-          tone === 'owned' ? styles.badgeTextOwned : styles.badgeTextReading,
-        ]}
-      >
-        {label}
-      </Text>
+    <View style={styles.header}>
+      <Pressable style={styles.backlink} onPress={onBack} hitSlop={12}>
+        <Ionicons name="chevron-back" size={20} color={theme.muted} />
+        <Text style={styles.backText}>Retour</Text>
+      </Pressable>
+      {onDelete ? (
+        <Pressable onPress={onDelete} hitSlop={12}>
+          <Ionicons name="trash-outline" size={20} color={theme.muted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  backlink: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: theme.spacing.lg,
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.screenPadX,
     paddingVertical: theme.spacing.md,
   },
+  backlink: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   backText: { fontFamily: theme.font.semibold, fontSize: 13, color: theme.muted },
-  scroll: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.xl },
+  scroll: { paddingHorizontal: theme.screenPadX, paddingBottom: theme.spacing.xl },
   hero: { flexDirection: 'row', gap: theme.spacing.md, marginBottom: theme.spacing.md },
   heroBody: { flex: 1, justifyContent: 'center' },
   heroTitle: { fontFamily: theme.font.bold, fontSize: 22, color: theme.ink },
-  heroSub: {
-    fontFamily: theme.font.regular,
-    fontSize: 13,
-    color: theme.muted,
-    marginTop: 4,
-    textTransform: 'capitalize',
-  },
+  heroAuthor: { fontFamily: theme.font.medium, fontSize: 13, color: theme.sub, marginTop: 4 },
+  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  heroType: { fontFamily: theme.font.medium, fontSize: 13, color: theme.muted },
   badges: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: 10 },
-  badge: { borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
-  badgeReading: { backgroundColor: 'rgba(245,81,57,0.14)' },
-  badgeOwned: { backgroundColor: 'rgba(245,81,57,0.14)' },
-  badgeText: { fontFamily: theme.font.bold, fontSize: 10 },
-  badgeTextReading: { color: theme.accent },
-  badgeTextOwned: { color: theme.accent },
   progressCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -187,7 +246,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xs,
   },
   progressLabel: { fontFamily: theme.font.regular, fontSize: 12, color: theme.muted },
-  progressBig: { fontFamily: theme.font.bold, fontSize: 26, color: theme.ink, marginTop: 2 },
+  progressBig: { fontFamily: theme.font.extrabold, fontSize: 26, color: theme.ink, marginTop: 2 },
   progressRight: { width: 80, gap: 6 },
   progressPct: {
     fontFamily: theme.font.bold,

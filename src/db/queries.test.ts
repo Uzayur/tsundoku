@@ -8,6 +8,7 @@ import {
   insertVolume,
   listSeries,
   listVolumes,
+  setVolumeCurrentPage,
   setVolumeFinishedAt,
   setVolumeStatus,
   updateSeries,
@@ -116,6 +117,14 @@ describe('volume queries', () => {
     expect((await listVolumes(db, sid))[0].finishedAt).toBe('2026-03-15');
     await setVolumeFinishedAt(db, vid, null);
     expect((await listVolumes(db, sid))[0].finishedAt).toBeNull();
+  });
+
+  it('setVolumeCurrentPage records the current page', async () => {
+    const db = await freshDb();
+    const sid = await insertSeries(db, sampleSeries);
+    const vid = await insertVolume(db, sampleVolume(sid, 1));
+    await setVolumeCurrentPage(db, vid, 75);
+    expect((await listVolumes(db, sid))[0].currentPage).toBe(75);
   });
 
   it('deleteVolume removes only that volume', async () => {

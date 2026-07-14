@@ -24,7 +24,7 @@ export const STATUS_STYLE: Record<SlotState, SlotStyle> = {
   missing: { fill: theme.beigeDk, border: theme.beigeDk, text: theme.muted },
   wishlist: { fill: 'transparent', border: theme.muted, text: theme.muted, dashed: true },
   owned: { fill: theme.accent, border: theme.accent, text: theme.surface },
-  reading: { fill: theme.inkHover, border: theme.inkHover, text: theme.surface },
+  reading: { fill: 'rgba(245,81,57,0.16)', border: theme.accent, text: theme.accent },
   read: { fill: theme.ink, border: theme.ink, text: theme.beige },
 };
 
@@ -36,5 +36,5 @@ export const STATUS_LABEL: Record<SlotState, string> = {
   read: 'Lu',
 };
 
-// The four states shown in the series-detail legend, in cycle order.
-export const LEGEND_STATES: SlotState[] = ['read', 'owned', 'wishlist', 'missing'];
+// The states shown in the series-detail legend.
+export const LEGEND_STATES: SlotState[] = ['read', 'reading', 'owned', 'wishlist', 'missing'];
