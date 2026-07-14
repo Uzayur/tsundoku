@@ -1,5 +1,5 @@
 import { Db } from '~/src/db/database';
-import { migrate } from '~/src/db/schema';
+import { migrate, MIGRATIONS } from '~/src/db/schema';
 import { createTestDb } from '~/src/db/testDb';
 
 async function version(db: Db): Promise<number> {
@@ -20,14 +20,14 @@ describe('migrate', () => {
   it('bumps user_version to the migration count', async () => {
     const db = createTestDb();
     await migrate(db);
-    expect(await version(db)).toBe(1);
+    expect(await version(db)).toBe(MIGRATIONS.length);
   });
 
   it('is idempotent — running twice does not throw or re-create', async () => {
     const db = createTestDb();
     await migrate(db);
-    await migrate(db); // would throw "table already exists" if it re-ran migration 1
-    expect(await version(db)).toBe(1);
+    await migrate(db); // would throw "table already exists" if it re-ran a migration
+    expect(await version(db)).toBe(MIGRATIONS.length);
   });
 
   it('enforces UNIQUE(series_id, number) on volumes', async () => {

@@ -28,7 +28,15 @@ CREATE TABLE volumes (
 CREATE INDEX idx_volumes_series ON volumes(series_id);
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_1];
+const MIGRATION_2 = `
+CREATE TABLE api_cache (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+`;
+
+export const MIGRATIONS: string[] = [MIGRATION_1, MIGRATION_2];
 
 export async function migrate(db: Db): Promise<void> {
   const row = await db.getFirst<{ user_version: number }>('PRAGMA user_version');
