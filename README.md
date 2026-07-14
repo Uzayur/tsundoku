@@ -40,7 +40,7 @@ A standalone novel is simply a series with one volume.
 
 ## Tech stack
 
-- [Expo](https://expo.dev/) SDK 57 · React Native 0.86 · React 19 · TypeScript (strict)
+- [Expo](https://expo.dev/) SDK 54 · React Native 0.81 · React 19 · TypeScript (strict)
 - [expo-router](https://docs.expo.dev/router/introduction/) — file-based navigation
 - [expo-sqlite](https://docs.expo.dev/versions/latest/sdk/sqlite/) — local persistence
 - [expo-camera](https://docs.expo.dev/versions/latest/sdk/camera/) — ISBN barcode scanning
