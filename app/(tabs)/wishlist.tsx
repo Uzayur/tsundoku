@@ -1,79 +1,78 @@
 import { router } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { Badge } from '~/src/components/ui/Badge';
 import { Screen } from '~/src/components/ui/Screen';
 import { ScreenHeader } from '~/src/components/ui/ScreenHeader';
+import { SectionTitle } from '~/src/components/ui/SectionTitle';
+import { LibraryRow } from '~/src/components/ui/LibraryRow';
+import { SeriesType, Volume } from '~/src/db/models';
 import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
 
-interface WishRow {
-  key: string;
-  seriesId: number;
-  seriesTitle: string;
-  number: number;
-}
+const TYPE_LABEL: Record<SeriesType, string> = {
+  manga: 'Manga',
+  novel: 'Roman',
+  bd: 'BD',
+  comic: 'Comics',
+};
 
 export default function WishlistScreen() {
   const series = useLibrary((s) => s.series);
   const volumesBySeriesId = useLibrary((s) => s.volumesBySeriesId);
 
-  const rows: WishRow[] = [];
-  for (const s of series) {
-    for (const v of volumesBySeriesId[s.id] ?? []) {
-      if (v.status === 'wishlist') {
-        rows.push({
-          key: `${s.id}-${v.number}`,
-          seriesId: s.id,
-          seriesTitle: s.title,
-          number: v.number,
-        });
-      }
-    }
-  }
+  const groups = series
+    .map((s) => ({
+      series: s,
+      volumes: (volumesBySeriesId[s.id] ?? [])
+        .filter((v) => v.status === 'wishlist')
+        .sort((a, b) => a.number - b.number),
+    }))
+    .filter((g) => g.volumes.length > 0);
+
+  const totalWishCount = groups.reduce((sum, g) => sum + g.volumes.length, 0);
 
   return (
     <Screen>
-      <FlatList
-        data={rows}
-        keyExtractor={(r) => r.key}
-        ListHeaderComponent={<ScreenHeader title="Envies" subtitle={`${rows.length} tomes`} />}
-        renderItem={({ item }) => (
-          <Pressable
-            style={styles.row}
-            onPress={() => router.push({ pathname: '/series/[id]', params: { id: item.seriesId } })}
-          >
-            <Text style={styles.title} numberOfLines={1}>
-              {item.seriesTitle}
-            </Text>
-            <Text style={styles.vol}>Tome {item.number}</Text>
-          </Pressable>
+      <ScreenHeader title="Liste d'envies" subtitle={`${totalWishCount} tomes`} />
+      <ScrollView contentContainerStyle={styles.content}>
+        {groups.length === 0 ? (
+          <Text style={styles.empty}>Aucune envie pour l’instant</Text>
+        ) : (
+          groups.map((g) => (
+            <View key={g.series.id}>
+              <SectionTitle>{`${g.series.title} · ${g.volumes.length} tomes`}</SectionTitle>
+              <View style={styles.list}>
+                {g.volumes.map((v: Volume) => (
+                  <LibraryRow
+                    key={v.id}
+                    seed={g.series.id}
+                    coverUrl={g.series.coverUrl}
+                    title={`Tome ${v.number}`}
+                    subtitle={g.series.author ?? TYPE_LABEL[g.series.type]}
+                    trailing={<Badge tone="wish" label="Wishlist" />}
+                    onPress={() =>
+                      router.push({ pathname: '/series/[id]', params: { id: g.series.id } })
+                    }
+                  />
+                ))}
+              </View>
+            </View>
+          ))
         )}
-        contentContainerStyle={styles.content}
-        ListEmptyComponent={<Text style={styles.empty}>Aucune envie pour l’instant</Text>}
-      />
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
-    gap: theme.spacing.sm,
+    paddingHorizontal: theme.screenPadX,
+    paddingBottom: theme.tabBarClearance,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.surface,
-    borderRadius: theme.radiusLg,
-    borderWidth: 1,
-    borderColor: theme.line,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+  list: {
+    gap: 11,
   },
-  title: { flex: 1, fontFamily: theme.font.semibold, fontSize: 15, color: theme.ink },
-  vol: { fontFamily: theme.font.medium, fontSize: 13, color: theme.accent },
   empty: {
     fontFamily: theme.font.regular,
     color: theme.muted,

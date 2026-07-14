@@ -1,11 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BookMetadata, lookupIsbn } from '~/src/api/isbn';
+import { Badge } from '~/src/components/ui/Badge';
+import { Cover } from '~/src/components/ui/Cover';
 import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
 
@@ -16,159 +17,166 @@ export default function ScanScreen() {
 
   const [busy, setBusy] = useState(false);
   const [book, setBook] = useState<BookMetadata | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const [added, setAdded] = useState(false);
 
   const onScanned = async (isbn: string) => {
     if (busy || book) return;
     setBusy(true);
-    setNotFound(false);
     try {
       const result = await lookupIsbn(isbn);
-      if (result) {
-        setBook(result);
-      } else {
-        setBook({ isbn, title: null, pageCount: null, coverUrl: null, authors: [] });
-        setNotFound(true);
-      }
+      setBook(result ?? { isbn, title: null, pageCount: null, coverUrl: null, authors: [] });
     } finally {
       setBusy(false);
     }
   };
 
-  const reset = () => {
-    setBook(null);
-    setNotFound(false);
-  };
-
-  const onAdd = async () => {
-    if (!book) return;
+  const onConfirm = async () => {
+    if (!book || added) return;
+    setAdded(true);
     const id = await addBook(book);
     router.replace({ pathname: '/series/[id]', params: { id } });
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={26} color={theme.ink} />
-        </Pressable>
-        <Text style={styles.title}>Scanner un code-barres</Text>
-      </View>
+    <View style={styles.container}>
+      {permission?.granted ? (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8'] }}
+          onBarcodeScanned={({ data }) => onScanned(data)}
+        />
+      ) : null}
 
-      {!permission ? (
-        <Text style={styles.hint}>Chargement de la caméra…</Text>
-      ) : !permission.granted ? (
-        <View style={styles.center}>
-          <Text style={styles.hint}>Autorisez la caméra pour scanner les codes-barres.</Text>
-          <Pressable style={styles.primaryBtn} onPress={requestPermission}>
-            <Text style={styles.primaryText}>Autoriser la caméra</Text>
-          </Pressable>
-        </View>
-      ) : book ? (
-        <View style={styles.result}>
-          <Text style={styles.resultTitle}>{book.title ?? 'Titre inconnu'}</Text>
-          {notFound ? (
-            <Text style={styles.resultMeta}>ISBN {book.isbn} — non trouvé, ajout manuel</Text>
-          ) : (
-            <Text style={styles.resultMeta}>
-              {book.authors.join(', ') || 'Auteur inconnu'}
-              {book.pageCount ? ` · ${book.pageCount} pages` : ''}
-            </Text>
-          )}
-          <View style={styles.actions}>
-            <Pressable style={styles.secondaryBtn} onPress={reset}>
-              <Text style={styles.secondaryText}>Scanner à nouveau</Text>
-            </Pressable>
-            <Pressable style={styles.primaryBtn} onPress={onAdd}>
-              <Text style={styles.primaryText}>Ajouter</Text>
+      <View style={styles.overlay}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={[styles.close, { top: insets.top + theme.spacing.md }]}
+        >
+          <Text style={styles.closeText}>✕ Fermer</Text>
+        </Pressable>
+
+        {!permission ? (
+          <View style={styles.center}>
+            <Text style={styles.help}>Chargement de la caméra…</Text>
+          </View>
+        ) : !permission.granted ? (
+          <View style={styles.center}>
+            <Text style={styles.help}>Autorisez la caméra pour scanner les codes-barres.</Text>
+            <Pressable style={styles.primaryBtn} onPress={requestPermission}>
+              <Text style={styles.primaryText}>Autoriser la caméra</Text>
             </Pressable>
           </View>
-        </View>
-      ) : (
-        <View style={styles.cameraWrap}>
-          <CameraView
-            style={StyleSheet.absoluteFill}
-            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8'] }}
-            onBarcodeScanned={({ data }) => onScanned(data)}
-          />
-          <View style={styles.reticle} />
-          {busy ? (
-            <View style={styles.busy}>
-              <ActivityIndicator color={theme.surface} />
+        ) : (
+          <>
+            <View style={styles.reticleWrap}>
+              <View style={styles.reticle}>
+                <View style={styles.scanLine} />
+              </View>
+              <Text style={styles.help}>Visez le code-barres ISBN</Text>
             </View>
-          ) : null}
-          <Text style={styles.scanHint}>Visez le code-barres au dos du livre</Text>
-        </View>
-      )}
+
+            {book ? (
+              <View
+                style={[styles.confirmCard, { paddingBottom: insets.bottom + theme.spacing.md }]}
+              >
+                <View style={styles.confirmRow}>
+                  <Cover
+                    size="sm"
+                    seed={book.isbn.length}
+                    coverUrl={book.coverUrl}
+                    title={book.title ?? book.isbn}
+                  />
+                  <View style={styles.confirmInfo}>
+                    <Text style={styles.confirmTitle} numberOfLines={2}>
+                      {book.title ?? 'Titre inconnu'}
+                    </Text>
+                    <Text style={styles.confirmMeta}>
+                      {`ISBN ${book.isbn}${book.pageCount ? ` · ${book.pageCount} p.` : ''}`}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable style={styles.confirmBtn} onPress={onConfirm}>
+                  <Badge tone="read" label="Ajouté ✓" />
+                </Pressable>
+              </View>
+            ) : null}
+          </>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+  container: { flex: 1, backgroundColor: theme.ink },
+  overlay: { ...StyleSheet.absoluteFillObject },
+  close: {
+    position: 'absolute',
+    left: theme.screenPadX,
+    zIndex: 2,
   },
-  title: { flex: 1, fontFamily: theme.font.bold, fontSize: 22, color: theme.ink },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md },
-  hint: {
-    fontFamily: theme.font.regular,
-    color: theme.muted,
-    textAlign: 'center',
-    marginTop: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  cameraWrap: {
+  closeText: { fontFamily: theme.font.bold, fontSize: 15, color: theme.beige },
+  center: {
     flex: 1,
-    margin: theme.spacing.lg,
-    borderRadius: theme.radiusLg,
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.xl,
+  },
+  reticleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.lg,
   },
   reticle: {
-    position: 'absolute',
-    top: '35%',
-    left: '15%',
-    right: '15%',
-    height: 120,
+    width: 250,
+    height: 150,
     borderWidth: 2,
-    borderColor: theme.accent,
-    borderRadius: theme.radiusSm,
+    borderColor: theme.beige,
+    borderRadius: 14,
+    justifyContent: 'center',
   },
-  busy: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  scanHint: {
-    position: 'absolute',
-    bottom: theme.spacing.lg,
-    alignSelf: 'center',
-    fontFamily: theme.font.medium,
-    color: theme.surface,
-    backgroundColor: '#0f222dcc',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radiusSm,
-    overflow: 'hidden',
-  },
-  result: { padding: theme.spacing.lg, gap: theme.spacing.sm },
-  resultTitle: { fontFamily: theme.font.bold, fontSize: 20, color: theme.ink },
-  resultMeta: { fontFamily: theme.font.regular, fontSize: 14, color: theme.muted },
-  actions: { flexDirection: 'row', gap: theme.spacing.md, marginTop: theme.spacing.md },
-  primaryBtn: {
+  scanLine: {
+    height: 2,
     backgroundColor: theme.accent,
-    borderRadius: theme.radiusSm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    marginHorizontal: 14,
   },
-  primaryText: { fontFamily: theme.font.semibold, fontSize: 14, color: theme.surface },
-  secondaryBtn: {
+  help: {
+    fontFamily: theme.font.medium,
+    fontSize: 14,
+    color: theme.beige,
+    textAlign: 'center',
+  },
+  confirmCard: {
     backgroundColor: theme.surface,
+    borderTopLeftRadius: theme.radiusLg,
+    borderTopRightRadius: theme.radiusLg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  confirmInfo: { flex: 1, gap: 4 },
+  confirmTitle: { fontFamily: theme.font.bold, fontSize: 16, color: theme.ink },
+  confirmMeta: { fontFamily: theme.font.medium, fontSize: 13, color: theme.muted },
+  confirmBtn: {
+    backgroundColor: theme.surface2,
     borderWidth: 1,
     borderColor: theme.line,
     borderRadius: theme.radiusSm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  secondaryText: { fontFamily: theme.font.semibold, fontSize: 14, color: theme.ink },
+  primaryBtn: {
+    backgroundColor: theme.ink,
+    borderRadius: theme.radiusSm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 12,
+  },
+  primaryText: { fontFamily: theme.font.semibold, fontSize: 14, color: theme.beige },
 });

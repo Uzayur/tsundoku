@@ -33,6 +33,6 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.md,
   },
   textCol: { flex: 1 },
-  title: { fontFamily: theme.font.bold, fontSize: 28, color: theme.ink },
-  subtitle: { fontFamily: theme.font.regular, fontSize: 15, color: theme.muted, marginTop: 2 },
+  title: { fontFamily: theme.font.extrabold, fontSize: 25, letterSpacing: -0.6, color: theme.ink },
+  subtitle: { fontFamily: theme.font.medium, fontSize: 13, color: theme.sub, marginTop: 2 },
 });

@@ -1,4 +1,4 @@
-import { Volume } from '~/src/db/models';
+import { Series, SeriesType, Volume } from '~/src/db/models';
 
 export type Period = 'month' | 'quarter' | 'semester' | 'year';
 
@@ -64,4 +64,45 @@ export function totalBooksRead(volumes: Volume[]): number {
 /** Sum of pageCount (null treated as 0) over read volumes with a finishedAt date. */
 export function totalPagesRead(volumes: Volume[]): number {
   return volumes.filter(isRead).reduce((sum, volume) => sum + (volume.pageCount ?? 0), 0);
+}
+
+/**
+ * Count series per type, keeping only types with a count > 0, sorted by
+ * count descending.
+ */
+export function typeDistribution(series: Series[]): { type: SeriesType; count: number }[] {
+  const counts = new Map<SeriesType, number>();
+  for (const s of series) {
+    counts.set(s.type, (counts.get(s.type) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([type, count]) => ({ type, count }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Sort precomputed {title, read} entries by read count descending, take the
+ * first `limit`, and drop entries with no reads.
+ */
+export function topSeries(
+  input: { title: string; read: number }[],
+  limit = 3,
+): { title: string; read: number }[] {
+  return [...input]
+    .sort((a, b) => b.read - a.read)
+    .slice(0, limit)
+    .filter((entry) => entry.read > 0);
+}
+
+/**
+ * Average pages per read book, rounded to the nearest integer. Returns 0 when
+ * no books have been read.
+ */
+export function pagesPerBook(volumes: Volume[]): number {
+  const books = totalBooksRead(volumes);
+  if (books === 0) {
+    return 0;
+  }
+  return Math.round(totalPagesRead(volumes) / books);
 }

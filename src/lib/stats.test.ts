@@ -1,5 +1,28 @@
-import { Volume } from '~/src/db/models';
-import { aggregate, periodKey, totalBooksRead, totalPagesRead } from '~/src/lib/stats';
+import { Series, Volume } from '~/src/db/models';
+import {
+  aggregate,
+  pagesPerBook,
+  periodKey,
+  topSeries,
+  totalBooksRead,
+  totalPagesRead,
+  typeDistribution,
+} from '~/src/lib/stats';
+
+function makeSeries(overrides: Partial<Series> = {}): Series {
+  return {
+    id: 1,
+    title: 'Série',
+    author: null,
+    type: 'manga',
+    totalVolumes: null,
+    externalIds: {},
+    coverUrl: null,
+    genres: [],
+    status: 'reading',
+    ...overrides,
+  };
+}
 
 function makeVolume(overrides: Partial<Volume> = {}): Volume {
   return {
@@ -132,5 +155,91 @@ describe('totalPagesRead', () => {
       makeVolume({ id: 5, status: 'owned', finishedAt: '2026-02-01', pageCount: 999 }),
     ];
     expect(totalPagesRead(volumes)).toBe(320);
+  });
+});
+
+describe('typeDistribution', () => {
+  it('counts series per type, omits zero-count types, sorts by count desc', () => {
+    const series: Series[] = [
+      makeSeries({ id: 1, type: 'manga' }),
+      makeSeries({ id: 2, type: 'manga' }),
+      makeSeries({ id: 3, type: 'manga' }),
+      makeSeries({ id: 4, type: 'novel' }),
+      makeSeries({ id: 5, type: 'novel' }),
+      makeSeries({ id: 6, type: 'bd' }),
+    ];
+    expect(typeDistribution(series)).toEqual([
+      { type: 'manga', count: 3 },
+      { type: 'novel', count: 2 },
+      { type: 'bd', count: 1 },
+    ]);
+  });
+
+  it('returns an empty array when there are no series', () => {
+    expect(typeDistribution([])).toEqual([]);
+  });
+});
+
+describe('topSeries', () => {
+  it('sorts by read desc and takes the default limit of 3', () => {
+    const input = [
+      { title: 'A', read: 2 },
+      { title: 'B', read: 8 },
+      { title: 'C', read: 5 },
+      { title: 'D', read: 4 },
+    ];
+    expect(topSeries(input)).toEqual([
+      { title: 'B', read: 8 },
+      { title: 'C', read: 5 },
+      { title: 'D', read: 4 },
+    ]);
+  });
+
+  it('drops entries with read === 0', () => {
+    const input = [
+      { title: 'A', read: 3 },
+      { title: 'B', read: 0 },
+      { title: 'C', read: 0 },
+    ];
+    expect(topSeries(input)).toEqual([{ title: 'A', read: 3 }]);
+  });
+
+  it('respects a custom limit', () => {
+    const input = [
+      { title: 'A', read: 1 },
+      { title: 'B', read: 2 },
+      { title: 'C', read: 3 },
+    ];
+    expect(topSeries(input, 1)).toEqual([{ title: 'C', read: 3 }]);
+  });
+
+  it('returns an empty array when nothing has been read', () => {
+    expect(topSeries([{ title: 'A', read: 0 }])).toEqual([]);
+  });
+});
+
+describe('pagesPerBook', () => {
+  it('rounds total pages divided by total books read', () => {
+    const volumes: Volume[] = [
+      makeVolume({ id: 1, finishedAt: '2026-01-01', pageCount: 200 }),
+      makeVolume({ id: 2, finishedAt: '2026-02-01', pageCount: 150 }),
+      makeVolume({ id: 3, finishedAt: '2026-03-01', pageCount: 100 }),
+    ];
+    // (200 + 150 + 100) / 3 = 150
+    expect(pagesPerBook(volumes)).toBe(150);
+  });
+
+  it('rounds to the nearest integer', () => {
+    const volumes: Volume[] = [
+      makeVolume({ id: 1, finishedAt: '2026-01-01', pageCount: 100 }),
+      makeVolume({ id: 2, finishedAt: '2026-02-01', pageCount: 101 }),
+    ];
+    // 201 / 2 = 100.5 → 101
+    expect(pagesPerBook(volumes)).toBe(101);
+  });
+
+  it('returns 0 when there are no read books', () => {
+    const volumes: Volume[] = [makeVolume({ id: 1, status: 'owned', finishedAt: null })];
+    expect(pagesPerBook(volumes)).toBe(0);
   });
 });
