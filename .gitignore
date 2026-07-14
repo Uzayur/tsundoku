@@ -42,3 +42,7 @@ yarn-error.*
 
 # local docs (not pushed)
 docs/
+
+# Claude Code (local only, not pushed)
+.claude/
+CLAUDE.md
