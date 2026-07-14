@@ -37,6 +37,9 @@ export default function AddScreen() {
           <Ionicons name="chevron-back" size={26} color={theme.ink} />
         </Pressable>
         <Text style={styles.title}>Ajouter une série</Text>
+        <Pressable onPress={() => router.push('/scan')} hitSlop={12}>
+          <Ionicons name="barcode-outline" size={26} color={theme.accent} />
+        </Pressable>
       </View>
 
       <TextInput

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { fetchSeries, SeriesSearchResult } from '~/src/api/anilist';
+import { BookMetadata } from '~/src/api/isbn';
 import { BackupData } from '~/src/lib/backup';
 import { getCached, setCached } from '~/src/db/cache';
 import { openDatabase } from '~/src/db/expoClient';
@@ -27,6 +28,7 @@ interface LibraryState {
   cycleVolume: (seriesId: number, number: number) => Promise<void>;
   search: (query: string) => Promise<void>;
   addSeries: (input: NewSeries) => Promise<number>;
+  addBook: (meta: BookMetadata) => Promise<number>;
   importBackup: (data: BackupData) => Promise<void>;
 }
 
@@ -136,6 +138,33 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
       volumesBySeriesId: { ...get().volumesBySeriesId, [id]: [] },
     });
     return id;
+  },
+
+  addBook: async (meta) => {
+    const db = await openDatabase();
+    const seriesId = await insertSeries(db, {
+      title: meta.title ?? meta.isbn,
+      type: 'manga',
+      totalVolumes: 1,
+      externalIds: {},
+      coverUrl: meta.coverUrl,
+      genres: [],
+      status: 'reading',
+    });
+    await insertVolume(db, {
+      seriesId,
+      number: 1,
+      isbn: meta.isbn,
+      title: meta.title,
+      pageCount: meta.pageCount,
+      coverUrl: meta.coverUrl,
+      status: 'owned',
+      currentPage: null,
+      startedAt: null,
+      finishedAt: null,
+    });
+    await get().load();
+    return seriesId;
   },
 
   importBackup: async (data) => {
