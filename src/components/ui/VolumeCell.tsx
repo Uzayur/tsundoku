@@ -6,10 +6,12 @@ import { theme } from '~/src/theme/theme';
 export function VolumeCell({
   number,
   state,
+  width,
   onPress,
 }: {
   number: number;
   state: SlotState;
+  width: number;
   onPress: () => void;
 }) {
   const s = STATUS_STYLE[state];
@@ -19,9 +21,12 @@ export function VolumeCell({
       style={[
         styles.cell,
         {
+          width,
+          height: width / 0.72,
           backgroundColor: s.fill,
           borderColor: s.border,
           borderStyle: s.dashed ? 'dashed' : 'solid',
+          borderWidth: s.dashed ? 1.5 : 0,
         },
       ]}
     >
@@ -32,12 +37,10 @@ export function VolumeCell({
 
 const styles = StyleSheet.create({
   cell: {
-    width: 44,
-    height: 58,
-    borderRadius: theme.radiusSm,
-    borderWidth: 1.5,
+    borderRadius: 9,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 6,
   },
-  num: { fontFamily: theme.font.semibold, fontSize: 15 },
+  num: { fontFamily: theme.font.bold, fontSize: 13 },
 });

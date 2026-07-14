@@ -2,18 +2,10 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Series } from '~/src/db/models';
+import { Cover } from '~/src/components/ui/Cover';
 import { ProgressBar } from '~/src/components/ui/ProgressBar';
 import { progressFraction } from '~/src/lib/progress';
 import { theme } from '~/src/theme/theme';
-
-function initials(title: string): string {
-  return title
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase();
-}
 
 export function SeriesCard({ series, readCount }: { series: Series; readCount: number }) {
   const total = series.totalVolumes;
@@ -22,9 +14,7 @@ export function SeriesCard({ series, readCount }: { series: Series; readCount: n
       style={styles.card}
       onPress={() => router.push({ pathname: '/series/[id]', params: { id: series.id } })}
     >
-      <View style={styles.cover}>
-        <Text style={styles.coverText}>{initials(series.title)}</Text>
-      </View>
+      <Cover title={series.title} seed={series.id} size="md" />
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
           {series.title}
@@ -53,15 +43,6 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
     gap: theme.spacing.md,
   },
-  cover: {
-    width: 52,
-    height: 72,
-    borderRadius: theme.radiusSm,
-    backgroundColor: theme.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverText: { fontFamily: theme.font.bold, color: theme.surface, fontSize: 18 },
   body: { flex: 1, justifyContent: 'center', gap: 4 },
   title: { fontFamily: theme.font.semibold, fontSize: 16, color: theme.ink },
   type: { fontFamily: theme.font.regular, fontSize: 13, color: theme.muted },

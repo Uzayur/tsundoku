@@ -1,11 +1,15 @@
 import { nextStatus, SlotState, STATUS_LABEL, STATUS_STYLE } from '~/src/lib/volumeStatus';
 
 describe('nextStatus', () => {
-  it('walks the full cycle back to missing', () => {
-    const seq: SlotState[] = ['missing', 'wishlist', 'owned', 'reading', 'read', 'missing'];
+  it('walks the four-state cycle back to missing', () => {
+    const seq: SlotState[] = ['missing', 'wishlist', 'owned', 'read', 'missing'];
     for (let i = 0; i < seq.length - 1; i++) {
       expect(nextStatus(seq[i])).toBe(seq[i + 1]);
     }
+  });
+
+  it('folds a non-cycle status (reading) back into the cycle', () => {
+    expect(nextStatus('reading')).toBe('missing');
   });
 });
 
