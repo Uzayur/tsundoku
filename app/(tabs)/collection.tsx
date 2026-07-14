@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 
-import { Screen } from '../../src/components/ui/Screen';
-import { theme } from '../../src/theme/theme';
+import { Screen } from '~/src/components/ui/Screen';
+import { theme } from '~/src/theme/theme';
 
 export default function CollectionScreen() {
   return (

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
-import { TabConfig, TABS } from '../../src/components/navigation/tabs.config';
-import { theme } from '../../src/theme/theme';
+import { TabConfig, TABS } from '~/src/components/navigation/tabs.config';
+import { theme } from '~/src/theme/theme';
 
 export default function TabsLayout() {
   return (

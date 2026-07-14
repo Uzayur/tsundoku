@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { theme } from '../../theme/theme';
+import { theme } from '~/src/theme/theme';
 
 type ScreenProps = {
   children: React.ReactNode;
