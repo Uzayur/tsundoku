@@ -20,37 +20,38 @@ export function OptionsSheet({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <Text style={styles.title}>{title}</Text>
-        {options.map((o) => (
-          <Pressable
-            key={o.label}
-            style={styles.option}
-            onPress={() => {
-              o.onPress();
-              onClose();
-            }}
-          >
-            <Text style={[styles.optionLabel, o.destructive && styles.destructive]}>{o.label}</Text>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <View style={styles.wrap}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={styles.sheet}>
+          <Text style={styles.title}>{title}</Text>
+          {options.map((o) => (
+            <Pressable
+              key={o.label}
+              style={styles.option}
+              onPress={() => {
+                o.onPress();
+                onClose();
+              }}
+            >
+              <Text style={[styles.optionLabel, o.destructive && styles.destructive]}>
+                {o.label}
+              </Text>
+            </Pressable>
+          ))}
+          <Pressable style={styles.cancel} onPress={onClose}>
+            <Text style={styles.cancelText}>Annuler</Text>
           </Pressable>
-        ))}
-        <Pressable style={styles.cancel} onPress={onClose}>
-          <Text style={styles.cancelText}>Annuler</Text>
-        </Pressable>
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,34,45,0.45)' },
+  wrap: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(15,34,45,0.45)' },
   sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     backgroundColor: theme.bg,
     borderTopLeftRadius: theme.radiusLg,
     borderTopRightRadius: theme.radiusLg,

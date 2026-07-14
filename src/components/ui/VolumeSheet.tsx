@@ -1,14 +1,18 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { SlotState } from '~/src/lib/volumeStatus';
 import { theme } from '~/src/theme/theme';
-
-const STATUS_OPTIONS: { target: SlotState; label: string }[] = [
-  { target: 'wishlist', label: 'Wishlist' },
-  { target: 'owned', label: 'Possédé' },
-  { target: 'read', label: 'Lu' },
-];
 
 export function VolumeSheet({
   visible,
@@ -51,68 +55,77 @@ export function VolumeSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <Pressable style={styles.backdrop} onPress={close} />
-      <View style={styles.sheet}>
-        <Text style={styles.title}>Tome {number}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    <Modal visible={visible} transparent animationType="none" onRequestClose={close}>
+      <KeyboardAvoidingView
+        style={styles.wrap}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <Pressable style={styles.backdrop} onPress={close} />
+        <View style={styles.sheet}>
+          <Text style={styles.title}>Tome {number}</Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
-        <Pressable style={styles.toggleRow} onPress={() => setApplyPrev((v) => !v)}>
-          <Text style={styles.toggleLabel}>Appliquer aux tomes précédents</Text>
-          <Switch
-            value={applyPrev}
-            onValueChange={setApplyPrev}
-            trackColor={{ true: theme.accent, false: theme.line }}
-            thumbColor={theme.surface}
-          />
-        </Pressable>
-
-        {STATUS_OPTIONS.map((o) => (
-          <Pressable key={o.target} style={styles.option} onPress={() => choose(o.target)}>
-            <Text style={styles.optionLabel}>{o.label}</Text>
-          </Pressable>
-        ))}
-
-        {pageMode ? (
-          <View style={styles.pageRow}>
-            <TextInput
-              style={styles.pageInput}
-              value={page}
-              onChangeText={setPage}
-              keyboardType="number-pad"
-              placeholder="Page actuelle"
-              placeholderTextColor={theme.muted}
-              autoFocus
+          <Pressable style={styles.toggleRow} onPress={() => setApplyPrev((v) => !v)}>
+            <Text style={styles.toggleLabel}>Appliquer aux tomes précédents</Text>
+            <Switch
+              value={applyPrev}
+              onValueChange={setApplyPrev}
+              trackColor={{ true: theme.accent, false: theme.line }}
+              thumbColor={theme.surface}
             />
-            <Pressable style={styles.pageBtn} onPress={confirmPage}>
-              <Text style={styles.pageBtnText}>OK</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable style={styles.option} onPress={() => setPageMode(true)}>
-            <Text style={styles.optionLabel}>En cours…</Text>
           </Pressable>
-        )}
 
-        <Pressable style={styles.option} onPress={() => choose('missing')}>
-          <Text style={[styles.optionLabel, styles.destructive]}>Supprimer</Text>
-        </Pressable>
+          <Pressable style={styles.option} onPress={() => choose('read')}>
+            <Text style={styles.optionLabel}>Lu</Text>
+          </Pressable>
 
-        <Pressable style={styles.cancel} onPress={close}>
-          <Text style={styles.cancelText}>Annuler</Text>
-        </Pressable>
-      </View>
+          {pageMode ? (
+            <View style={styles.pageRow}>
+              <TextInput
+                style={styles.pageInput}
+                value={page}
+                onChangeText={setPage}
+                keyboardType="number-pad"
+                placeholder="Page actuelle"
+                placeholderTextColor={theme.muted}
+                autoFocus
+                onSubmitEditing={confirmPage}
+              />
+              <Pressable style={styles.pageBtn} onPress={confirmPage}>
+                <Text style={styles.pageBtnText}>OK</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={styles.option} onPress={() => setPageMode(true)}>
+              <Text style={styles.optionLabel}>En cours…</Text>
+            </Pressable>
+          )}
+
+          <Pressable style={styles.option} onPress={() => choose('owned')}>
+            <Text style={styles.optionLabel}>Possédé</Text>
+          </Pressable>
+
+          <Pressable style={styles.option} onPress={() => choose('wishlist')}>
+            <Text style={styles.optionLabel}>Wishlist</Text>
+          </Pressable>
+
+          <Pressable style={styles.option} onPress={() => choose('missing')}>
+            <Text style={[styles.optionLabel, styles.destructive]}>Supprimer</Text>
+          </Pressable>
+
+          <Pressable style={styles.cancel} onPress={close}>
+            <Text style={styles.cancelText}>Annuler</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,34,45,0.45)' },
+  wrap: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(15,34,45,0.45)' },
   sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     backgroundColor: theme.bg,
     borderTopLeftRadius: theme.radiusLg,
     borderTopRightRadius: theme.radiusLg,
