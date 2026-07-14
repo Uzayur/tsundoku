@@ -91,6 +91,17 @@ export default function SeriesDetailScreen() {
 
   const cellWidth = (width - theme.screenPadX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
+  // Single-tome works (e.g. romans) track pages, not tomes.
+  const singleVolume = total === 1;
+  const vol1 = volumes.find((v) => v.number === 1);
+  const pageTotal = vol1?.pageCount ?? null;
+  const currentPage = vol1?.status === 'read' && pageTotal ? pageTotal : (vol1?.currentPage ?? 0);
+  const pageFraction = pageTotal
+    ? Math.min(1, currentPage / pageTotal)
+    : vol1?.status === 'read'
+      ? 1
+      : 0;
+
   const sheetVolume = sheetTome != null ? volumes.find((v) => v.number === sheetTome) : undefined;
   const sheetSubtitle =
     sheetTome == null
@@ -121,63 +132,87 @@ export default function SeriesDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.progressCard}>
-          <View>
-            <Text style={styles.progressLabel}>Progression de lecture</Text>
-            <Text style={styles.progressBig}>
-              {read} / {total || '?'}
-            </Text>
-          </View>
-          <View style={styles.progressRight}>
-            <ProgressBar fraction={progressFraction(read, total || null)} />
-            <Text style={styles.progressPct}>
-              {Math.round(progressFraction(read, total || null) * 100)}%
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Tomes</Text>
-        <View style={styles.grid}>
-          {slots.map((n) => (
-            <VolumeCell
-              key={n}
-              number={n}
-              state={stateFor(n)}
-              width={cellWidth}
-              onPress={() => setSheetTome(n)}
-            />
-          ))}
-        </View>
-
-        <View style={styles.legend}>
-          {LEGEND_STATES.map((st) => (
-            <View key={st} style={styles.legendItem}>
-              <View
-                style={[
-                  styles.swatch,
-                  {
-                    backgroundColor: STATUS_STYLE[st].fill,
-                    borderColor: STATUS_STYLE[st].border,
-                    borderStyle: STATUS_STYLE[st].dashed ? 'dashed' : 'solid',
-                    borderWidth: STATUS_STYLE[st].dashed ? 1.5 : 0,
-                  },
-                ]}
-              />
-              <Text style={styles.legendLabel}>{STATUS_LABEL[st]}</Text>
+        {singleVolume ? (
+          <>
+            <Pressable style={styles.progressCard} onPress={() => setSheetTome(1)}>
+              <View>
+                <Text style={styles.progressLabel}>Progression</Text>
+                <Text style={styles.progressBig}>
+                  {pageTotal
+                    ? `${currentPage} / ${pageTotal}`
+                    : currentPage
+                      ? `page ${currentPage}`
+                      : STATUS_LABEL[vol1?.status ?? 'missing']}
+                </Text>
+              </View>
+              <View style={styles.progressRight}>
+                <ProgressBar fraction={pageFraction} />
+                <Text style={styles.progressPct}>{Math.round(pageFraction * 100)}%</Text>
+              </View>
+            </Pressable>
+            <Text style={styles.note}>Touchez pour mettre à jour votre progression.</Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.progressCard}>
+              <View>
+                <Text style={styles.progressLabel}>Progression de lecture</Text>
+                <Text style={styles.progressBig}>
+                  {read} / {total || '?'}
+                </Text>
+              </View>
+              <View style={styles.progressRight}>
+                <ProgressBar fraction={progressFraction(read, total || null)} />
+                <Text style={styles.progressPct}>
+                  {Math.round(progressFraction(read, total || null) * 100)}%
+                </Text>
+              </View>
             </View>
-          ))}
-        </View>
 
-        <Text style={styles.note}>Touche un tome pour choisir son statut.</Text>
+            <Text style={styles.sectionTitle}>Tomes</Text>
+            <View style={styles.grid}>
+              {slots.map((n) => (
+                <VolumeCell
+                  key={n}
+                  number={n}
+                  state={stateFor(n)}
+                  width={cellWidth}
+                  onPress={() => setSheetTome(n)}
+                />
+              ))}
+            </View>
+
+            <View style={styles.legend}>
+              {LEGEND_STATES.map((st) => (
+                <View key={st} style={styles.legendItem}>
+                  <View
+                    style={[
+                      styles.swatch,
+                      {
+                        backgroundColor: STATUS_STYLE[st].fill,
+                        borderColor: STATUS_STYLE[st].border,
+                        borderStyle: STATUS_STYLE[st].dashed ? 'dashed' : 'solid',
+                        borderWidth: STATUS_STYLE[st].dashed ? 1.5 : 0,
+                      },
+                    ]}
+                  />
+                  <Text style={styles.legendLabel}>{STATUS_LABEL[st]}</Text>
+                </View>
+              ))}
+            </View>
+
+            <Text style={styles.note}>Touche un tome pour choisir son statut.</Text>
+          </>
+        )}
       </ScrollView>
 
       <VolumeSheet
         visible={sheetTome != null}
-        number={sheetTome ?? 0}
+        title={singleVolume ? 'Ce livre' : `Tome ${sheetTome}`}
         subtitle={sheetSubtitle}
         onClose={() => setSheetTome(null)}
-        onSelect={(target, applyToPrevious) => {
-          if (sheetTome != null) setVolumeState(seriesId, sheetTome, target, applyToPrevious);
+        onSelect={(target) => {
+          if (sheetTome != null) setVolumeState(seriesId, sheetTome, target);
           setSheetTome(null);
         }}
         onSetPage={(page) => {

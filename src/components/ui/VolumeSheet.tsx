@@ -5,7 +5,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -16,25 +15,23 @@ import { theme } from '~/src/theme/theme';
 
 export function VolumeSheet({
   visible,
-  number,
+  title,
   subtitle,
   onClose,
   onSelect,
   onSetPage,
 }: {
   visible: boolean;
-  number: number;
+  title: string;
   subtitle?: string;
   onClose: () => void;
-  onSelect: (target: SlotState, applyToPrevious: boolean) => void;
+  onSelect: (target: SlotState) => void;
   onSetPage: (page: number) => void;
 }) {
-  const [applyPrev, setApplyPrev] = useState(false);
   const [pageMode, setPageMode] = useState(false);
   const [page, setPage] = useState('');
 
   const reset = () => {
-    setApplyPrev(false);
     setPageMode(false);
     setPage('');
   };
@@ -43,7 +40,7 @@ export function VolumeSheet({
     onClose();
   };
   const choose = (target: SlotState) => {
-    onSelect(target, applyPrev);
+    onSelect(target);
     reset();
   };
   const confirmPage = () => {
@@ -62,18 +59,8 @@ export function VolumeSheet({
       >
         <Pressable style={styles.backdrop} onPress={close} />
         <View style={styles.sheet}>
-          <Text style={styles.title}>Tome {number}</Text>
+          <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-
-          <Pressable style={styles.toggleRow} onPress={() => setApplyPrev((v) => !v)}>
-            <Text style={styles.toggleLabel}>Appliquer aux tomes précédents</Text>
-            <Switch
-              value={applyPrev}
-              onValueChange={setApplyPrev}
-              trackColor={{ true: theme.accent, false: theme.line }}
-              thumbColor={theme.surface}
-            />
-          </Pressable>
 
           <Pressable style={styles.option} onPress={() => choose('read')}>
             <Text style={styles.optionLabel}>Lu</Text>
@@ -135,13 +122,6 @@ const styles = StyleSheet.create({
   },
   title: { fontFamily: theme.font.extrabold, fontSize: 20, color: theme.ink },
   subtitle: { fontFamily: theme.font.medium, fontSize: 13, color: theme.sub, marginTop: -4 },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: theme.spacing.sm,
-  },
-  toggleLabel: { fontFamily: theme.font.medium, fontSize: 14, color: theme.ink },
   option: {
     backgroundColor: theme.surface,
     borderWidth: 1,
