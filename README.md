@@ -110,14 +110,14 @@ covers are meant to be the visual stars.
 ## Roadmap
 
 - [x] **Foundation** — theme, tab navigation, Inter font, ESLint/Prettier
-- [ ] SQLite schema + queries, seeded data
-- [ ] Dashboard + series detail (clickable volume grid)
-- [ ] API layer (Open Library, Google Books, AniList) with SQLite caching
-- [ ] ISBN barcode scanning
-- [ ] Add by title / import a whole series
-- [ ] Wishlist view
-- [ ] Stats with charts
-- [ ] Export / import (JSON + CSV)
+- [x] SQLite schema + queries + migrations, seeded data
+- [x] Dashboard + series detail (tappable volume grid)
+- [x] API layer (AniList search, Open Library + Google Books ISBN) with SQLite caching
+- [x] ISBN barcode scanning
+- [x] Add by title (AniList search → import)
+- [x] Wishlist view
+- [x] Stats (books/pages by month, quarter, semester, year)
+- [x] Export / import (JSON + CSV)
 
 ## License
 
