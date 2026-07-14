@@ -8,6 +8,7 @@ import {
   insertVolume,
   listSeries,
   listVolumes,
+  setVolumeFinishedAt,
   setVolumeStatus,
   updateSeries,
 } from '~/src/db/queries';
@@ -104,6 +105,16 @@ describe('volume queries', () => {
     await setVolumeStatus(db, vid, 'read');
     const vols = await listVolumes(db, sid);
     expect(vols[0].status).toBe('read');
+  });
+
+  it('setVolumeFinishedAt records and clears the finished date', async () => {
+    const db = await freshDb();
+    const sid = await insertSeries(db, sampleSeries);
+    const vid = await insertVolume(db, sampleVolume(sid, 1));
+    await setVolumeFinishedAt(db, vid, '2026-03-15');
+    expect((await listVolumes(db, sid))[0].finishedAt).toBe('2026-03-15');
+    await setVolumeFinishedAt(db, vid, null);
+    expect((await listVolumes(db, sid))[0].finishedAt).toBeNull();
   });
 
   it('deleteVolume removes only that volume', async () => {

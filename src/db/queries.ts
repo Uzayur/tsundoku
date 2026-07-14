@@ -74,6 +74,14 @@ export async function setVolumeStatus(db: Db, id: number, status: VolumeStatus):
   await db.run('UPDATE volumes SET status = ? WHERE id = ?', [status, id]);
 }
 
+export async function setVolumeFinishedAt(
+  db: Db,
+  id: number,
+  finishedAt: string | null,
+): Promise<void> {
+  await db.run('UPDATE volumes SET finished_at = ? WHERE id = ?', [finishedAt, id]);
+}
+
 export async function deleteVolume(db: Db, id: number): Promise<void> {
   await db.run('DELETE FROM volumes WHERE id = ?', [id]);
 }

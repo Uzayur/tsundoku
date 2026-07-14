@@ -10,6 +10,7 @@ import {
   insertVolume,
   listSeries,
   listVolumes,
+  setVolumeFinishedAt,
   setVolumeStatus,
 } from '~/src/db/queries';
 import { nextStatus, SlotState } from '~/src/lib/volumeStatus';
@@ -89,7 +90,10 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     } else {
       const status = next as VolumeStatus;
       await setVolumeStatus(db, existing.id, status);
-      updated = volumes.map((v) => (v.id === existing.id ? { ...v, status } : v));
+      // Stamp/clear the finished date so stats can bucket read volumes by period.
+      const finishedAt = status === 'read' ? new Date().toISOString().slice(0, 10) : null;
+      await setVolumeFinishedAt(db, existing.id, finishedAt);
+      updated = volumes.map((v) => (v.id === existing.id ? { ...v, status, finishedAt } : v));
     }
 
     set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: updated } });
