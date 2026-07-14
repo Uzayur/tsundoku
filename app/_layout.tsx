@@ -9,8 +9,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
-import { openDatabase } from '~/src/db/expoClient';
-import { listSeries } from '~/src/db/queries';
+import { useLibrary } from '~/src/store/useLibrary';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,10 +28,10 @@ export default function RootLayout() {
   }, [loaded, error]);
 
   useEffect(() => {
-    openDatabase()
-      .then((db) => listSeries(db))
-      .then((series) => console.log(`[tsundoku] DB ready — ${series.length} series`))
-      .catch((err) => console.error('[tsundoku] DB init failed', err));
+    useLibrary
+      .getState()
+      .load()
+      .catch((err) => console.error('[tsundoku] load failed', err));
   }, []);
 
   if (!loaded && !error) {
