@@ -6,6 +6,7 @@ function makeFixture(): BackupData {
     {
       id: 1,
       title: 'Spice, Wolf',
+      author: 'Isuna Hasekura',
       type: 'novel',
       totalVolumes: 21,
       externalIds: { anilist: 39026 },
@@ -16,6 +17,7 @@ function makeFixture(): BackupData {
     {
       id: 2,
       title: 'Frieren',
+      author: null,
       type: 'manga',
       totalVolumes: null,
       externalIds: {},

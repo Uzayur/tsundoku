@@ -17,6 +17,7 @@ import { createTestDb } from '~/src/db/testDb';
 
 const sampleSeries: NewSeries = {
   title: 'Chainsaw Man',
+  author: 'Tatsuki Fujimoto',
   type: 'manga',
   totalVolumes: 17,
   externalIds: { anilist: 105778 },

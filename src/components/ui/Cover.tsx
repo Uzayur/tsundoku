@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text } from 'react-native';
+import { Image, StyleSheet, Text } from 'react-native';
 
 import { theme } from '~/src/theme/theme';
 
@@ -28,16 +28,29 @@ function initials(title: string): string {
 export function Cover({
   title,
   seed,
+  coverUrl,
   size = 'md',
   label,
 }: {
   title: string;
   seed: number;
+  coverUrl?: string | null;
   size?: keyof typeof SIZES;
   label?: string;
 }) {
-  const [a, b] = PALETTES[Math.abs(seed) % PALETTES.length];
   const dim = SIZES[size];
+
+  if (coverUrl) {
+    return (
+      <Image
+        source={{ uri: coverUrl }}
+        style={[styles.cover, { width: dim.width, height: dim.height }]}
+        resizeMode="cover"
+      />
+    );
+  }
+
+  const [a, b] = PALETTES[Math.abs(seed) % PALETTES.length];
   return (
     <LinearGradient
       colors={[a, b]}
@@ -55,6 +68,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: theme.beigeDk,
     shadowColor: theme.ink,
     shadowOpacity: 0.22,
     shadowRadius: 12,

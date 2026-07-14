@@ -10,6 +10,13 @@ export interface AniListMedia {
   title: { romaji: string | null; english: string | null };
   coverImage: { large: string | null };
   description: string | null;
+  staff?: { edges?: { node?: { name?: { full?: string | null } | null } | null }[] | null } | null;
+}
+
+/** First credited staff member (the author/artist), or null. */
+function extractAuthor(media: AniListMedia): string | null {
+  const edge = media.staff?.edges?.[0];
+  return edge?.node?.name?.full ?? null;
 }
 
 export interface SeriesSearchResult {
@@ -26,7 +33,7 @@ export type FetchLike = (
 const ANILIST_URL = 'https://graphql.anilist.co';
 
 const SEARCH_QUERY =
-  'query ($search: String) { Page(page: 1, perPage: 10) { media(search: $search, type: MANGA) { id format volumes chapters status genres title { romaji english } coverImage { large } description(asHtml: false) } } }';
+  'query ($search: String) { Page(page: 1, perPage: 10) { media(search: $search, type: MANGA) { id format volumes chapters status genres title { romaji english } coverImage { large } description(asHtml: false) staff(perPage: 1, sort: RELEVANCE) { edges { node { name { full } } } } } } }';
 
 function mapType(format: string | null): SeriesType {
   switch (format) {
@@ -45,6 +52,7 @@ function mapType(format: string | null): SeriesType {
 export function normalizeMedia(media: AniListMedia): SeriesSearchResult {
   const series: NewSeries = {
     title: media.title.english ?? media.title.romaji ?? '(sans titre)',
+    author: extractAuthor(media),
     type: mapType(media.format),
     totalVolumes: media.volumes ?? null,
     externalIds: { anilist: media.id },

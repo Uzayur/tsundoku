@@ -1,6 +1,6 @@
 import { getCached, setCached } from '~/src/db/cache';
 import { Db } from '~/src/db/database';
-import { migrate } from '~/src/db/schema';
+import { migrate, MIGRATIONS } from '~/src/db/schema';
 import { createTestDb } from '~/src/db/testDb';
 
 async function version(db: Db): Promise<number> {
@@ -9,17 +9,17 @@ async function version(db: Db): Promise<number> {
 }
 
 describe('migration #2 (api_cache)', () => {
-  it('creates the api_cache table and bumps user_version to 2', async () => {
+  it('creates the api_cache table and bumps user_version to the migration count', async () => {
     const db = createTestDb();
     await migrate(db);
-    expect(await version(db)).toBe(2);
+    expect(await version(db)).toBe(MIGRATIONS.length);
     const tables = await db.all<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );
     expect(tables.map((t) => t.name)).toContain('api_cache');
   });
 
-  it('upgrades a v1 install to v2 without touching existing data', async () => {
+  it('upgrades a v1 install without touching existing data', async () => {
     const db = createTestDb();
     // Simulate an existing v1 install: series/volumes exist, user_version = 1.
     await db.exec('CREATE TABLE series (id INTEGER PRIMARY KEY, title TEXT)');
@@ -29,7 +29,7 @@ describe('migration #2 (api_cache)', () => {
 
     await migrate(db);
 
-    expect(await version(db)).toBe(2);
+    expect(await version(db)).toBe(MIGRATIONS.length);
     const rows = await db.all<{ title: string }>('SELECT title FROM series');
     expect(rows).toEqual([{ title: 'Kept' }]);
     const cache = await db.all('SELECT * FROM api_cache');

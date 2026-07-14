@@ -27,6 +27,7 @@ const SEED: { series: NewSeries; volumes: SeedVolume[] }[] = [
   {
     series: {
       title: 'Chainsaw Man',
+      author: 'Tatsuki Fujimoto',
       type: 'manga',
       totalVolumes: 17,
       externalIds: { anilist: 105778 },
@@ -43,6 +44,7 @@ const SEED: { series: NewSeries; volumes: SeedVolume[] }[] = [
   {
     series: {
       title: 'Berserk',
+      author: 'Kentaro Miura',
       type: 'manga',
       totalVolumes: 42,
       externalIds: { anilist: 30002 },
@@ -55,6 +57,7 @@ const SEED: { series: NewSeries; volumes: SeedVolume[] }[] = [
   {
     series: {
       title: 'Frieren',
+      author: 'Kanehito Yamada',
       type: 'manga',
       totalVolumes: 13,
       externalIds: { anilist: 118586 },

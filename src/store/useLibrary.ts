@@ -144,6 +144,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const db = await openDatabase();
     const seriesId = await insertSeries(db, {
       title: meta.title ?? meta.isbn,
+      author: meta.authors[0] ?? null,
       type: 'manga',
       totalVolumes: 1,
       externalIds: {},
@@ -174,6 +175,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     for (const s of data.series) {
       const newId = await insertSeries(db, {
         title: s.title,
+        author: s.author,
         type: s.type,
         totalVolumes: s.totalVolumes,
         externalIds: s.externalIds,

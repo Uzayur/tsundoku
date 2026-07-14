@@ -9,13 +9,13 @@ import {
   volumeInsertParams,
 } from '~/src/db/serialize';
 
-const SERIES_COLS = 'title, type, total_volumes, external_ids, cover_url, genres, status';
+const SERIES_COLS = 'title, author, type, total_volumes, external_ids, cover_url, genres, status';
 const VOLUME_COLS =
   'series_id, number, isbn, title, page_count, cover_url, status, current_page, started_at, finished_at';
 
 export async function insertSeries(db: Db, input: NewSeries): Promise<number> {
   const res = await db.run(
-    `INSERT INTO series (${SERIES_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO series (${SERIES_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     seriesInsertParams(input),
   );
   return res.lastInsertRowId;
@@ -39,6 +39,7 @@ export async function updateSeries(db: Db, id: number, patch: Partial<NewSeries>
     params.push(value);
   };
   if (patch.title !== undefined) push('title', patch.title);
+  if (patch.author !== undefined) push('author', patch.author);
   if (patch.type !== undefined) push('type', patch.type);
   if (patch.totalVolumes !== undefined) push('total_volumes', patch.totalVolumes);
   if (patch.externalIds !== undefined) push('external_ids', JSON.stringify(patch.externalIds));

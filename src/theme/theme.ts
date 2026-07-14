@@ -9,10 +9,15 @@ export const theme = {
   greyLt: '#edeff4',
   bg: '#f4f2ec', // warm background
   surface: '#ffffff',
+  surface2: '#f6f4ee',
   line: '#e6e2d6',
+  sub: '#7c858c', // tertiary text
   radiusSm: 10,
   radiusLg: 22,
   spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
+  // Screen horizontal padding (Rankr proto = 16) and bottom clearance for the tab bar.
+  screenPadX: 16,
+  tabBarClearance: 92,
   // Weight-specific Inter families. Values are the export names from
   // @expo-google-fonts/inter, which are also the runtime fontFamily names.
   font: {
@@ -20,5 +25,6 @@ export const theme = {
     medium: 'Inter_500Medium',
     semibold: 'Inter_600SemiBold',
     bold: 'Inter_700Bold',
+    extrabold: 'Inter_800ExtraBold',
   },
 } as const;

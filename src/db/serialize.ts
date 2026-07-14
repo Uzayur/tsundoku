@@ -3,6 +3,7 @@ import { NewSeries, NewVolume, Series, Volume } from '~/src/db/models';
 export interface SeriesRow {
   id: number;
   title: string;
+  author: string | null;
   type: string;
   total_volumes: number | null;
   external_ids: string;
@@ -29,6 +30,7 @@ export function rowToSeries(r: SeriesRow): Series {
   return {
     id: r.id,
     title: r.title,
+    author: r.author,
     type: r.type as Series['type'],
     totalVolumes: r.total_volumes,
     externalIds: JSON.parse(r.external_ids) as Record<string, string | number>,
@@ -54,10 +56,11 @@ export function rowToVolume(r: VolumeRow): Volume {
   };
 }
 
-/** Column order: title, type, total_volumes, external_ids, cover_url, genres, status */
+/** Column order: title, author, type, total_volumes, external_ids, cover_url, genres, status */
 export function seriesInsertParams(s: NewSeries): unknown[] {
   return [
     s.title,
+    s.author ?? null,
     s.type,
     s.totalVolumes ?? null,
     JSON.stringify(s.externalIds ?? {}),

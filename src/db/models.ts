@@ -5,6 +5,7 @@ export type VolumeStatus = 'wishlist' | 'owned' | 'reading' | 'read';
 export interface Series {
   id: number;
   title: string;
+  author: string | null;
   type: SeriesType;
   totalVolumes: number | null;
   externalIds: Record<string, string | number>;

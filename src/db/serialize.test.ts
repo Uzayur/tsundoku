@@ -11,6 +11,7 @@ describe('serialize', () => {
     const series = rowToSeries({
       id: 7,
       title: 'Berserk',
+      author: 'Kentaro Miura',
       type: 'manga',
       total_volumes: 42,
       external_ids: '{"anilist":30002}',
@@ -21,6 +22,7 @@ describe('serialize', () => {
     expect(series).toEqual({
       id: 7,
       title: 'Berserk',
+      author: 'Kentaro Miura',
       type: 'manga',
       totalVolumes: 42,
       externalIds: { anilist: 30002 },
@@ -62,6 +64,7 @@ describe('serialize', () => {
   it('seriesInsertParams stringifies JSON and coalesces optionals to null', () => {
     const input: NewSeries = {
       title: 'Frieren',
+      author: 'Kanehito Yamada',
       type: 'manga',
       totalVolumes: null,
       externalIds: { anilist: 118586 },
@@ -71,6 +74,7 @@ describe('serialize', () => {
     };
     expect(seriesInsertParams(input)).toEqual([
       'Frieren',
+      'Kanehito Yamada',
       'manga',
       null,
       '{"anilist":118586}',

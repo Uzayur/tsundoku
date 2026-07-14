@@ -36,7 +36,11 @@ CREATE TABLE api_cache (
 );
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_1, MIGRATION_2];
+const MIGRATION_3 = `
+ALTER TABLE series ADD COLUMN author TEXT;
+`;
+
+export const MIGRATIONS: string[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 export async function migrate(db: Db): Promise<void> {
   const row = await db.getFirst<{ user_version: number }>('PRAGMA user_version');

@@ -57,7 +57,7 @@ export default function SeriesDetailScreen() {
       <Header onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
-          <Cover title={series.title} seed={series.id} size="lg" />
+          <Cover title={series.title} seed={series.id} coverUrl={series.coverUrl} size="lg" />
           <View style={styles.heroBody}>
             <Text style={styles.heroTitle}>{series.title}</Text>
             <Text style={styles.heroSub}>{series.type}</Text>
