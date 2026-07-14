@@ -1,13 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text } from 'react-native';
+
+import { Screen } from '../../src/components/ui/Screen';
+import { theme } from '../../src/theme/theme';
 
 export default function CollectionScreen() {
   return (
-    <View style={styles.container}>
-      <Text>Collection</Text>
-    </View>
+    <Screen>
+      <Text style={{ padding: theme.spacing.lg, color: theme.ink }}>Collection</Text>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-});
