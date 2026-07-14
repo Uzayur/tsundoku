@@ -6,7 +6,11 @@ import { theme } from '../../src/theme/theme';
 export default function AccueilScreen() {
   return (
     <Screen>
-      <Text style={{ padding: theme.spacing.lg, color: theme.ink }}>Accueil</Text>
+      <Text
+        style={{ padding: theme.spacing.lg, color: theme.ink, fontFamily: theme.font.semibold }}
+      >
+        Accueil
+      </Text>
     </Screen>
   );
 }

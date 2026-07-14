@@ -6,7 +6,11 @@ import { theme } from '../../src/theme/theme';
 export default function StatsScreen() {
   return (
     <Screen>
-      <Text style={{ padding: theme.spacing.lg, color: theme.ink }}>Stats</Text>
+      <Text
+        style={{ padding: theme.spacing.lg, color: theme.ink, fontFamily: theme.font.semibold }}
+      >
+        Stats
+      </Text>
     </Screen>
   );
 }

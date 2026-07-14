@@ -6,7 +6,11 @@ import { theme } from '../../src/theme/theme';
 export default function WishlistScreen() {
   return (
     <Screen>
-      <Text style={{ padding: theme.spacing.lg, color: theme.ink }}>Envies</Text>
+      <Text
+        style={{ padding: theme.spacing.lg, color: theme.ink, fontFamily: theme.font.semibold }}
+      >
+        Envies
+      </Text>
     </Screen>
   );
 }

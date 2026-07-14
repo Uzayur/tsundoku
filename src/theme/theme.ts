@@ -13,6 +13,12 @@ export const theme = {
   radiusSm: 10,
   radiusLg: 22,
   spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
-  // Replaced by weight-specific Inter families in Task 4.
-  font: 'System',
+  // Weight-specific Inter families. Values are the export names from
+  // @expo-google-fonts/inter, which are also the runtime fontFamily names.
+  font: {
+    regular: 'Inter_400Regular',
+    medium: 'Inter_500Medium',
+    semibold: 'Inter_600SemiBold',
+    bold: 'Inter_700Bold',
+  },
 } as const;
