@@ -157,10 +157,11 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
 
   addSeries: async (input) => {
     const db = await openDatabase();
-    const stamped: NewSeries = { ...input, addedAt: now() };
+    const addedAt = now();
+    const stamped: NewSeries = { ...input, addedAt };
     const id = await insertSeries(db, stamped);
-    const series = [...get().series, { id, ...stamped, addedAt: stamped.addedAt ?? null }].sort(
-      (a, b) => a.title.localeCompare(b.title),
+    const series = [...get().series, { id, ...stamped, addedAt }].sort((a, b) =>
+      a.title.localeCompare(b.title),
     );
     set({
       series,
