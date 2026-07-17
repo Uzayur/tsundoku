@@ -51,12 +51,19 @@ describe('recentlyAdded', () => {
   });
 
   it('puts series with a null addedAt last, newest id first among them', () => {
-    const series = [makeSeries(1, null), makeSeries(2, null), makeSeries(3, '2026-01-01T00:00:00.000Z')];
+    const series = [
+      makeSeries(1, null),
+      makeSeries(2, null),
+      makeSeries(3, '2026-01-01T00:00:00.000Z'),
+    ];
     expect(recentlyAdded(series).map((s) => s.id)).toEqual([3, 2, 1]);
   });
 
   it('does not mutate its input', () => {
-    const series = [makeSeries(1, '2026-07-01T00:00:00.000Z'), makeSeries(2, '2026-07-15T00:00:00.000Z')];
+    const series = [
+      makeSeries(1, '2026-07-01T00:00:00.000Z'),
+      makeSeries(2, '2026-07-15T00:00:00.000Z'),
+    ];
     recentlyAdded(series);
     expect(series.map((s) => s.id)).toEqual([1, 2]);
   });
@@ -117,7 +124,14 @@ describe('recentlyRead', () => {
     const series = [makeSeries(1, null), makeSeries(2, null)];
     const volumes = {
       1: [makeVolume({ id: 1, seriesId: 1, status: 'read', finishedAt: null })],
-      2: [makeVolume({ id: 2, seriesId: 2, status: 'reading', finishedAt: '2026-07-16T00:00:00.000Z' })],
+      2: [
+        makeVolume({
+          id: 2,
+          seriesId: 2,
+          status: 'reading',
+          finishedAt: '2026-07-16T00:00:00.000Z',
+        }),
+      ],
     };
     expect(recentlyRead(series, volumes)).toEqual([]);
   });
