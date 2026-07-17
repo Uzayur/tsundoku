@@ -21,6 +21,7 @@ import {
 import { SlotState } from '~/src/lib/volumeStatus';
 
 const today = () => new Date().toISOString().slice(0, 10);
+const now = () => new Date().toISOString();
 
 function newVolume(seriesId: number, number: number, status: VolumeStatus): Volume {
   return {
@@ -157,8 +158,9 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
 
   addSeries: async (input) => {
     const db = await openDatabase();
-    const id = await insertSeries(db, input);
-    const series = [...get().series, { id, ...input, addedAt: input.addedAt ?? null }].sort(
+    const stamped: NewSeries = { ...input, addedAt: now() };
+    const id = await insertSeries(db, stamped);
+    const series = [...get().series, { id, ...stamped, addedAt: stamped.addedAt ?? null }].sort(
       (a, b) => a.title.localeCompare(b.title),
     );
     set({
@@ -181,6 +183,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
       coverUrl: meta.coverUrl,
       genres: [],
       status: 'reading',
+      addedAt: now(),
     });
     await insertVolume(db, {
       seriesId,
@@ -226,6 +229,8 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         coverUrl: s.coverUrl,
         genres: s.genres,
         status: s.status,
+        // Preserve the original add date — stamping now() would destroy the real order.
+        addedAt: s.addedAt ?? null,
       });
       for (const v of data.volumesBySeriesId[s.id] ?? []) {
         await insertVolume(db, {
