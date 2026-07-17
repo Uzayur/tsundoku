@@ -83,21 +83,17 @@ export default function AccueilScreen() {
               <StatCard value={totalPagesRead(allVolumes)} label="Pages lues" />
             </View>
 
-            {added.length > 0 ? (
-              <>
-                <SectionTitle>Ajouts récents</SectionTitle>
-                <View style={styles.rows}>
-                  {added.map((item) =>
-                    row(
-                      item,
-                      volumesBySeriesId[item.id] ?? [],
-                      // Series predating migration 4 have no date to show.
-                      item.addedAt ? relativeDate(item.addedAt, now) : '',
-                    ),
-                  )}
-                </View>
-              </>
-            ) : null}
+            <SectionTitle>Ajouts récents</SectionTitle>
+            <View style={styles.rows}>
+              {added.map((item) =>
+                row(
+                  item,
+                  volumesBySeriesId[item.id] ?? [],
+                  // Series predating migration 4 have no date to show.
+                  item.addedAt ? relativeDate(item.addedAt, now) : '',
+                ),
+              )}
+            </View>
 
             {read.length > 0 ? (
               <>
