@@ -34,6 +34,7 @@ const SEED: { series: NewSeries; volumes: SeedVolume[] }[] = [
       coverUrl: null,
       genres: ['Shonen', 'Action', 'Horror'],
       status: 'reading',
+      addedAt: '2025-12-20T09:00:00.000Z',
     },
     volumes: [
       vol(1, 'read', 192, '2026-01-12'),
@@ -51,6 +52,7 @@ const SEED: { series: NewSeries; volumes: SeedVolume[] }[] = [
       coverUrl: null,
       genres: ['Seinen', 'Dark Fantasy'],
       status: 'reading',
+      addedAt: '2026-03-01T09:00:00.000Z',
     },
     volumes: [vol(1, 'read', 224, '2026-03-20'), vol(2, 'owned', 224), vol(3, 'wishlist', 224)],
   },
@@ -64,6 +66,7 @@ const SEED: { series: NewSeries; volumes: SeedVolume[] }[] = [
       coverUrl: null,
       genres: ['Shonen', 'Fantasy', 'Adventure'],
       status: 'reading',
+      addedAt: '2026-03-25T09:00:00.000Z',
     },
     volumes: [vol(1, 'read', 192, '2026-04-05'), vol(2, 'wishlist', 192)],
   },
