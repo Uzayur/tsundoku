@@ -20,6 +20,7 @@ export function VolumeSheet({
   onClose,
   onSelect,
   onSetPage,
+  showRemove = true,
 }: {
   visible: boolean;
   title: string;
@@ -27,6 +28,7 @@ export function VolumeSheet({
   onClose: () => void;
   onSelect: (target: SlotState) => void;
   onSetPage: (page: number) => void;
+  showRemove?: boolean;
 }) {
   const [pageMode, setPageMode] = useState(false);
   const [page, setPage] = useState('');
@@ -96,9 +98,11 @@ export function VolumeSheet({
             <Text style={styles.optionLabel}>Wishlist</Text>
           </Pressable>
 
-          <Pressable style={styles.option} onPress={() => choose('missing')}>
-            <Text style={[styles.optionLabel, styles.destructive]}>Supprimer</Text>
-          </Pressable>
+          {showRemove ? (
+            <Pressable style={styles.option} onPress={() => choose('missing')}>
+              <Text style={[styles.optionLabel, styles.destructive]}>Supprimer</Text>
+            </Pressable>
+          ) : null}
 
           <Pressable style={styles.cancel} onPress={close}>
             <Text style={styles.cancelText}>Annuler</Text>

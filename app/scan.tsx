@@ -5,6 +5,10 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BookMetadata, lookupIsbn } from '~/src/api/isbn';
+import { Cover } from '~/src/components/ui/Cover';
+import { VolumeSheet } from '~/src/components/ui/VolumeSheet';
+import { VolumeStatus } from '~/src/db/models';
+import { SlotState } from '~/src/lib/volumeStatus';
 import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
 
@@ -14,12 +18,18 @@ export default function ScanScreen() {
   const addBook = useLibrary((s) => s.addBook);
 
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<BookMetadata | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);
   const handled = useRef(false);
+  const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onScanned = async (isbn: string) => {
     if (handled.current) return;
     handled.current = true;
     setBusy(true);
+    // Look the book up, but do NOT save it: the scan only produces a preview the
+    // user confirms with an explicit status before anything hits the library.
     const meta: BookMetadata = (await lookupIsbn(isbn)) ?? {
       isbn,
       title: null,
@@ -31,9 +41,47 @@ export default function ScanScreen() {
       publisher: null,
       publishedYear: null,
     };
-    const id = await addBook(meta);
-    router.replace({ pathname: '/series/[id]', params: { id } });
+    setBusy(false);
+    setPreview(meta);
   };
+
+  // Clear the preview and re-arm the camera for the next book.
+  const rearm = () => {
+    setPreview(null);
+    setSheetOpen(false);
+    handled.current = false;
+  };
+
+  const save = (status: VolumeStatus, currentPage?: number) => {
+    if (!preview) return;
+    const meta = preview;
+    const label = meta.title ?? meta.isbn;
+    // Close the sheet and return to the scanner right away; the write and its
+    // DB reload finish in the background so the modal never lingers.
+    rearm();
+    if (addedTimer.current) clearTimeout(addedTimer.current);
+    setAdded(label);
+    addedTimer.current = setTimeout(() => setAdded(null), 1800);
+    void addBook(meta, status, currentPage);
+  };
+
+  const onSelect = (target: SlotState) => {
+    // 'missing' can't occur here (the sheet hides "Supprimer" while adding); the
+    // rest map straight onto a volume status.
+    if (target !== 'missing' && target !== 'reading') save(target);
+  };
+
+  const previewTitle = preview?.title ?? preview?.isbn ?? '';
+  const previewAuthor = preview?.authors[0] ?? null;
+  const previewMeta = preview
+    ? [
+        preview.publisher,
+        preview.publishedYear,
+        preview.pageCount ? `${preview.pageCount} p.` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
 
   return (
     <View style={styles.container}>
@@ -73,14 +121,61 @@ export default function ScanScreen() {
             {busy ? (
               <View style={styles.busy}>
                 <ActivityIndicator color={theme.beige} />
-                <Text style={styles.help}>Ajout du livre…</Text>
+                <Text style={styles.help}>Recherche du livre…</Text>
               </View>
+            ) : added ? (
+              <Text style={styles.help}>« {added} » ajouté ✓</Text>
             ) : (
               <Text style={styles.help}>Visez le code-barres ISBN</Text>
             )}
           </View>
         )}
       </View>
+
+      {preview ? (
+        <View style={[styles.previewCard, { paddingBottom: insets.bottom + theme.spacing.md }]}>
+          <View style={styles.previewRow}>
+            <Cover
+              title={previewTitle}
+              seed={Number(preview.isbn.replace(/\D/g, '')) || 0}
+              coverUrl={preview.coverUrl}
+              size="sm"
+            />
+            <View style={styles.previewInfo}>
+              <Text style={styles.previewTitle} numberOfLines={2}>
+                {previewTitle}
+              </Text>
+              {previewAuthor ? (
+                <Text style={styles.previewAuthor} numberOfLines={1}>
+                  {previewAuthor}
+                </Text>
+              ) : null}
+              {previewMeta ? (
+                <Text style={styles.previewMeta} numberOfLines={1}>
+                  {previewMeta}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          <Pressable style={styles.addBtn} onPress={() => setSheetOpen(true)}>
+            <Text style={styles.addText}>Ajouter à ma bibliothèque</Text>
+          </Pressable>
+          <Pressable style={styles.skipBtn} onPress={rearm}>
+            <Text style={styles.skipText}>Scanner un autre</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <VolumeSheet
+        visible={sheetOpen}
+        title={previewTitle || 'Ce livre'}
+        subtitle={previewAuthor ?? undefined}
+        showRemove={false}
+        onClose={() => setSheetOpen(false)}
+        onSelect={onSelect}
+        onSetPage={(page) => save('reading', page)}
+      />
     </View>
   );
 }
@@ -121,4 +216,29 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   primaryText: { fontFamily: theme.font.semibold, fontSize: 14, color: theme.ink },
+  previewCard: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: theme.bg,
+    borderTopLeftRadius: theme.radiusLg,
+    borderTopRightRadius: theme.radiusLg,
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+  },
+  previewRow: { flexDirection: 'row', gap: theme.spacing.md },
+  previewInfo: { flex: 1, justifyContent: 'center', gap: 3 },
+  previewTitle: { fontFamily: theme.font.bold, fontSize: 17, color: theme.ink },
+  previewAuthor: { fontFamily: theme.font.medium, fontSize: 13, color: theme.sub },
+  previewMeta: { fontFamily: theme.font.regular, fontSize: 12, color: theme.muted },
+  addBtn: {
+    backgroundColor: theme.accent,
+    borderRadius: theme.radiusSm,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  addText: { fontFamily: theme.font.semibold, fontSize: 15, color: theme.beige },
+  skipBtn: { alignItems: 'center', paddingVertical: 8 },
+  skipText: { fontFamily: theme.font.semibold, fontSize: 14, color: theme.muted },
 });

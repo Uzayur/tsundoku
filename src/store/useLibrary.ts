@@ -66,7 +66,7 @@ interface LibraryState {
   setVolumeCurrentPage: (seriesId: number, number: number, page: number) => Promise<void>;
   search: (query: string) => Promise<void>;
   addSeries: (input: NewSeries) => Promise<number>;
-  addBook: (meta: BookMetadata) => Promise<number>;
+  addBook: (meta: BookMetadata, status?: VolumeStatus, currentPage?: number) => Promise<number>;
   updateSeriesType: (id: number, type: SeriesType) => Promise<void>;
   removeSeries: (id: number) => Promise<void>;
   importBackup: (data: BackupData) => Promise<void>;
@@ -236,7 +236,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     return id;
   },
 
-  addBook: async (meta) => {
+  addBook: async (meta, status = 'owned', currentPage) => {
     const db = await openDatabase();
     const { baseTitle, number } = parseVolumeTitle(meta.title ?? meta.isbn);
     const volumeNumber = number ?? 1;
@@ -305,8 +305,12 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
       (v) => v.number === volumeNumber,
     );
     if (existing) {
-      // The tome is already tracked: the scan only contributes its real length.
+      // The tome is already tracked: the scan contributes its real length, and
+      // the status the user just chose overrides whatever it held before.
       await setVolumePageCount(db, existing.id, meta.pageCount);
+      await setVolumeStatus(db, existing.id, status);
+      await setVolumeFinishedAt(db, existing.id, status === 'read' ? now() : null);
+      if (currentPage != null) await setVolumeCurrentPage(db, existing.id, currentPage);
     } else {
       await insertVolume(db, {
         seriesId,
@@ -315,10 +319,10 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         title: meta.title,
         pageCount: meta.pageCount,
         coverUrl: meta.coverUrl,
-        status: 'owned',
-        currentPage: null,
+        status,
+        currentPage: currentPage ?? null,
         startedAt: null,
-        finishedAt: null,
+        finishedAt: status === 'read' ? now() : null,
       });
     }
 

@@ -37,6 +37,9 @@ function makeSeries(overrides: Partial<Series> & { id: number; title: string }):
     genres: [],
     status: 'reading',
     addedAt: null,
+    description: null,
+    publisher: null,
+    publishedYear: null,
     ...overrides,
   };
 }
@@ -228,6 +231,10 @@ describe('addBook', () => {
       pageCount: 200,
       coverUrl: null,
       authors: ['Oda'],
+      genres: [],
+      description: null,
+      publisher: null,
+      publishedYear: null,
       ...overrides,
     };
   }
@@ -247,6 +254,46 @@ describe('addBook', () => {
     expect(useLibrary.getState().series).toHaveLength(1);
     expect(volumesOf(seriesId)).toHaveLength(1);
     expect(volumesOf(seriesId)[0]).toMatchObject({ number: 3, pageCount: 200, isbn: '123' });
+  });
+
+  it('backfills empty genres and synopsis on a matching series when rescanned', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'One Piece', genres: [], description: null }));
+
+    await useLibrary.getState().addBook(
+      meta({
+        genres: ['Adventure', 'Fantasy'],
+        description: 'Luffy wants to be king of the pirates.',
+        publisher: 'Glénat',
+        publishedYear: 2013,
+      }),
+    );
+
+    const series = useLibrary.getState().series.find((s) => s.id === seriesId);
+    expect(series?.genres).toEqual(['Adventure', 'Fantasy']);
+    expect(series?.description).toBe('Luffy wants to be king of the pirates.');
+    expect(series?.publisher).toBe('Glénat');
+    expect(series?.publishedYear).toBe(2013);
+  });
+
+  it('does not overwrite existing genres or synopsis on rescan', async () => {
+    const seriesId = await useLibrary.getState().addSeries(
+      makeSeries({
+        id: 0,
+        title: 'One Piece',
+        genres: ['Shonen'],
+        description: 'Original synopsis.',
+      }),
+    );
+
+    await useLibrary
+      .getState()
+      .addBook(meta({ genres: ['Adventure'], description: 'Google synopsis.' }));
+
+    const series = useLibrary.getState().series.find((s) => s.id === seriesId);
+    expect(series?.genres).toEqual(['Shonen']);
+    expect(series?.description).toBe('Original synopsis.');
   });
 
   it('matches the local series regardless of case and accents', async () => {
