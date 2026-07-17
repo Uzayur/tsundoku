@@ -20,7 +20,6 @@ import {
 } from '~/src/db/queries';
 import { SlotState } from '~/src/lib/volumeStatus';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const now = () => new Date().toISOString();
 
 function newVolume(seriesId: number, number: number, status: VolumeStatus): Volume {
@@ -35,7 +34,7 @@ function newVolume(seriesId: number, number: number, status: VolumeStatus): Volu
     status,
     currentPage: null,
     startedAt: null,
-    finishedAt: status === 'read' ? today() : null,
+    finishedAt: status === 'read' ? now() : null,
   };
 }
 
@@ -97,7 +96,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         continue;
       }
       const status = target as VolumeStatus;
-      const finishedAt = status === 'read' ? today() : null;
+      const finishedAt = status === 'read' ? now() : null;
       if (existing) {
         await setVolumeStatus(db, existing.id, status);
         await setVolumeFinishedAt(db, existing.id, finishedAt);
