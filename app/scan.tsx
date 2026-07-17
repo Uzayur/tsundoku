@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { lookupIsbn } from '~/src/api/isbn';
+import { BookMetadata, lookupIsbn } from '~/src/api/isbn';
 import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
 
@@ -20,12 +20,16 @@ export default function ScanScreen() {
     if (handled.current) return;
     handled.current = true;
     setBusy(true);
-    const meta = (await lookupIsbn(isbn)) ?? {
+    const meta: BookMetadata = (await lookupIsbn(isbn)) ?? {
       isbn,
       title: null,
       pageCount: null,
       coverUrl: null,
       authors: [],
+      genres: [],
+      description: null,
+      publisher: null,
+      publishedYear: null,
     };
     const id = await addBook(meta);
     router.replace({ pathname: '/series/[id]', params: { id } });

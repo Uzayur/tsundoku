@@ -10,13 +10,13 @@ import {
 } from '~/src/db/serialize';
 
 const SERIES_COLS =
-  'title, author, type, total_volumes, external_ids, cover_url, genres, status, added_at';
+  'title, author, type, total_volumes, external_ids, cover_url, genres, status, added_at, description, publisher, published_year';
 const VOLUME_COLS =
   'series_id, number, isbn, title, page_count, cover_url, status, current_page, started_at, finished_at';
 
 export async function insertSeries(db: Db, input: NewSeries): Promise<number> {
   const res = await db.run(
-    `INSERT INTO series (${SERIES_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO series (${SERIES_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     seriesInsertParams(input),
   );
   return res.lastInsertRowId;
@@ -47,6 +47,9 @@ export async function updateSeries(db: Db, id: number, patch: Partial<NewSeries>
   if (patch.coverUrl !== undefined) push('cover_url', patch.coverUrl);
   if (patch.genres !== undefined) push('genres', JSON.stringify(patch.genres));
   if (patch.status !== undefined) push('status', patch.status);
+  if (patch.description !== undefined) push('description', patch.description);
+  if (patch.publisher !== undefined) push('publisher', patch.publisher);
+  if (patch.publishedYear !== undefined) push('published_year', patch.publishedYear);
   if (sets.length === 0) return;
   params.push(id);
   await db.run(`UPDATE series SET ${sets.join(', ')} WHERE id = ?`, params);

@@ -85,7 +85,7 @@ export default function AddScreen() {
   ];
 
   const onImport = async (result: SeriesSearchResult) => {
-    const id = await addSeries(result.series);
+    const id = await addSeries({ ...result.series, description: result.description });
     router.replace({ pathname: '/series/[id]', params: { id } });
   };
 

@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '~/src/theme/theme';
 
-export type BadgeTone = 'read' | 'owned' | 'reading' | 'wish';
+export type BadgeTone = 'read' | 'owned' | 'reading' | 'wish' | 'neutral';
 
 export function Badge({ label, tone }: { label: string; tone: BadgeTone }) {
   return (
@@ -22,6 +22,7 @@ const TONE_VIEW = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: theme.muted,
   },
+  neutral: { backgroundColor: theme.greyLt },
 });
 
 const TONE_TEXT = StyleSheet.create({
@@ -29,6 +30,7 @@ const TONE_TEXT = StyleSheet.create({
   owned: { color: theme.accent },
   reading: { color: theme.accent },
   wish: { color: theme.muted },
+  neutral: { color: theme.sub },
 });
 
 const styles = StyleSheet.create({

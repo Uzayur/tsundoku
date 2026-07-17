@@ -14,6 +14,9 @@ function makeFixture(): BackupData {
       genres: ['Fantasy', 'Romance'],
       status: 'reading',
       addedAt: null,
+      description: null,
+      publisher: null,
+      publishedYear: null,
     },
     {
       id: 2,
@@ -26,6 +29,9 @@ function makeFixture(): BackupData {
       genres: ['Fantasy'],
       status: 'planned',
       addedAt: null,
+      description: null,
+      publisher: null,
+      publishedYear: null,
     },
   ];
 

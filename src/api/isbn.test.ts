@@ -1,9 +1,13 @@
 import {
   BookMetadata,
+  cleanWorkDescription,
   FetchLike,
   lookupGoogleBooks,
   lookupIsbn,
   lookupOpenLibrary,
+  lookupOpenLibraryDescription,
+  normalizeCategories,
+  stripHtml,
 } from '~/src/api/isbn';
 
 const ISBN = '9781974709939';
@@ -53,6 +57,35 @@ function fetchReturning(status: number, payload: unknown): FetchLike {
   });
 }
 
+describe('normalizeCategories', () => {
+  it('splits BISAC paths and drops the fiction head', () => {
+    expect(normalizeCategories(['Fiction / Fantasy / Epic'])).toEqual(['Fantasy', 'Epic']);
+  });
+
+  it('dedupes tags across paths, case-insensitively', () => {
+    expect(
+      normalizeCategories(['Fiction / Fantasy', 'Juvenile Fiction / fantasy / Wizards']),
+    ).toEqual(['Fantasy', 'Wizards']);
+  });
+
+  it('returns an empty array when nothing survives the filter', () => {
+    expect(normalizeCategories(['Fiction', 'General'])).toEqual([]);
+    expect(normalizeCategories([])).toEqual([]);
+  });
+});
+
+describe('stripHtml', () => {
+  it('unwraps tags, entities and paragraph breaks', () => {
+    expect(stripHtml('<p>Hello&nbsp;<b>world</b></p><p>Line&amp;two</p>')).toBe(
+      'Hello world\n\nLine&two',
+    );
+  });
+
+  it('collapses runs of blank lines', () => {
+    expect(stripHtml('a<br><br><br><br>b')).toBe('a\n\nb');
+  });
+});
+
 describe('lookupOpenLibrary', () => {
   it('parses a fixture into BookMetadata', async () => {
     const result = await lookupOpenLibrary(ISBN, fetchReturning(200, OPEN_LIBRARY_FIXTURE));
@@ -62,6 +95,10 @@ describe('lookupOpenLibrary', () => {
       pageCount: 192,
       coverUrl: 'https://covers.openlibrary.org/b/id/12794650-L.jpg',
       authors: ['Tatsuki Fujimoto'],
+      genres: [],
+      description: null,
+      publisher: null,
+      publishedYear: null,
     });
   });
 
@@ -96,6 +133,24 @@ describe('lookupOpenLibrary', () => {
     expect(result?.coverUrl).toBeNull();
   });
 
+  it('extracts French genres from subjects, dropping noise', async () => {
+    const result = await lookupOpenLibrary(
+      ISBN,
+      fetchReturning(200, {
+        [`ISBN:${ISBN}`]: {
+          title: 'L’étranger',
+          subjects: [
+            { name: 'Philosophical Novels' },
+            { name: 'Murder' },
+            { name: 'Fiction' },
+            { name: 'French' },
+          ],
+        },
+      }),
+    );
+    expect(result?.genres).toEqual(['Roman philosophique']);
+  });
+
   it('defaults authors to an empty array when missing', async () => {
     const result = await lookupOpenLibrary(
       ISBN,
@@ -112,6 +167,49 @@ describe('lookupOpenLibrary', () => {
   });
 });
 
+describe('cleanWorkDescription', () => {
+  it('strips markdown link-ref lines and the [SDM] tag', () => {
+    const raw = 'Un vampire et une sorcière. [SDM].\n\n[1]: https://example.org/x';
+    expect(cleanWorkDescription(raw)).toBe('Un vampire et une sorcière.');
+  });
+});
+
+describe('lookupOpenLibraryDescription', () => {
+  function twoStepFetch(searchPayload: unknown, workPayload: unknown): FetchLike {
+    return async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () => (url.includes('search.json') ? searchPayload : workPayload),
+    });
+  }
+
+  it('resolves the work behind an ISBN and returns its description string', async () => {
+    const fetchFn = twoStepFetch(
+      { docs: [{ key: '/works/OL1230613W' }] },
+      { description: 'Le premier roman de Camus.' },
+    );
+    expect(await lookupOpenLibraryDescription(ISBN, fetchFn)).toBe('Le premier roman de Camus.');
+  });
+
+  it('reads the { value } description shape', async () => {
+    const fetchFn = twoStepFetch(
+      { docs: [{ key: '/works/OL1W' }] },
+      { description: { value: 'Une grève de mineurs.' } },
+    );
+    expect(await lookupOpenLibraryDescription(ISBN, fetchFn)).toBe('Une grève de mineurs.');
+  });
+
+  it('returns null when the ISBN matches no work', async () => {
+    const fetchFn = twoStepFetch({ docs: [] }, {});
+    expect(await lookupOpenLibraryDescription(ISBN, fetchFn)).toBeNull();
+  });
+
+  it('returns null when the work has no description', async () => {
+    const fetchFn = twoStepFetch({ docs: [{ key: '/works/OL1W' }] }, { title: 'No blurb' });
+    expect(await lookupOpenLibraryDescription(ISBN, fetchFn)).toBeNull();
+  });
+});
+
 describe('lookupGoogleBooks', () => {
   it('parses a fixture into BookMetadata', async () => {
     const result = await lookupGoogleBooks(ISBN, fetchReturning(200, GOOGLE_BOOKS_FIXTURE));
@@ -121,6 +219,10 @@ describe('lookupGoogleBooks', () => {
       pageCount: 192,
       coverUrl: 'https://books.google.com/books/content?id=abc&img=1&zoom=1',
       authors: ['Tatsuki Fujimoto'],
+      genres: [],
+      description: null,
+      publisher: null,
+      publishedYear: null,
     });
   });
 
@@ -158,7 +260,36 @@ describe('lookupGoogleBooks', () => {
       pageCount: 50,
       coverUrl: null,
       authors: [],
+      genres: [],
+      description: null,
+      publisher: null,
+      publishedYear: null,
     });
+  });
+
+  it('maps categories, description and publishing info from Google Books', async () => {
+    const result = await lookupGoogleBooks(
+      ISBN,
+      fetchReturning(200, {
+        totalItems: 1,
+        items: [
+          {
+            volumeInfo: {
+              title: 'Rich Volume',
+              pageCount: 320,
+              categories: ['Fiction / Fantasy / Epic', 'Juvenile Fiction / Action & Adventure'],
+              description: '<p>A <b>bold</b> quest.</p><br>The end.',
+              publisher: 'Viz Media',
+              publishedDate: '2020-11-03',
+            },
+          },
+        ],
+      }),
+    );
+    expect(result?.genres).toEqual(['Fantasy', 'Epic', 'Action & Adventure']);
+    expect(result?.description).toBe('A bold quest.\n\nThe end.');
+    expect(result?.publisher).toBe('Viz Media');
+    expect(result?.publishedYear).toBe(2020);
   });
 
   it('returns null when the response is not ok', async () => {
@@ -226,17 +357,103 @@ describe('lookupIsbn page count fallback', () => {
     expect(result?.pageCount).toBe(190);
   });
 
-  it('keeps the Open Library page count without calling Google Books', async () => {
-    const urls: string[] = [];
+  it('keeps Open Library edition data but takes genres and synopsis from Google Books', async () => {
+    const fakeFetch: FetchLike = async (url) =>
+      url.startsWith('https://openlibrary.org')
+        ? { ok: true, status: 200, json: async () => OPEN_LIBRARY_FIXTURE }
+        : {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              totalItems: 1,
+              items: [
+                {
+                  volumeInfo: {
+                    title: 'Chainsaw Man, Vol. 1',
+                    pageCount: 999,
+                    categories: ['Comics & Graphic Novels / Manga / Action & Adventure'],
+                    description: 'Denji dreams of a normal life.',
+                  },
+                },
+              ],
+            }),
+          };
+
+    const result = await lookupIsbn(ISBN, fakeFetch);
+
+    // Edition-level fields stay with Open Library...
+    expect(result?.pageCount).toBe(192);
+    expect(result?.coverUrl).toBe('https://covers.openlibrary.org/b/id/12794650-L.jpg');
+    // ...while genres and the synopsis only exist on Google Books.
+    expect(result?.genres).toEqual(['Comics & Graphic Novels', 'Manga', 'Action & Adventure']);
+    expect(result?.description).toBe('Denji dreams of a normal life.');
+  });
+
+  it('falls back to Open Library subjects when Google Books has no categories', async () => {
+    const fakeFetch: FetchLike = async (url) =>
+      url.startsWith('https://openlibrary.org')
+        ? {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              [`ISBN:${ISBN}`]: {
+                title: 'Germinal',
+                number_of_pages: 592,
+                subjects: [{ name: 'Classic Literature' }, { name: 'Coal miners' }],
+              },
+            }),
+          }
+        : {
+            ok: true,
+            status: 200,
+            // Google found the edition but tagged no categories — the French novel case.
+            json: async () => ({
+              totalItems: 1,
+              items: [{ volumeInfo: { title: 'Germinal', description: 'Miners strike.' } }],
+            }),
+          };
+
+    const result = await lookupIsbn(ISBN, fakeFetch);
+
+    expect(result?.genres).toEqual(['Classique']);
+    expect(result?.description).toBe('Miners strike.');
+  });
+
+  it('fills a missing description from the Open Library work as a last resort', async () => {
     const fakeFetch: FetchLike = async (url) => {
-      urls.push(url);
-      return { ok: true, status: 200, json: async () => OPEN_LIBRARY_FIXTURE };
+      if (url.includes('/api/books')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ [`ISBN:${ISBN}`]: { title: 'L’étranger', number_of_pages: 159 } }),
+        };
+      }
+      if (url.includes('googleapis')) {
+        // Google found the edition but has no synopsis — the French novel case.
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ totalItems: 1, items: [{ volumeInfo: { title: 'L’étranger' } }] }),
+        };
+      }
+      if (url.includes('search.json')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ docs: [{ key: '/works/OL1230613W' }] }),
+        };
+      }
+      // The work record.
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ description: 'Le premier roman de Camus.' }),
+      };
     };
 
     const result = await lookupIsbn(ISBN, fakeFetch);
 
-    expect(result?.pageCount).toBe(192);
-    expect(urls.some((u) => u.includes('googleapis'))).toBe(false);
+    expect(result?.description).toBe('Le premier roman de Camus.');
   });
 
   it('returns the Open Library result when Google Books is rate limited', async () => {

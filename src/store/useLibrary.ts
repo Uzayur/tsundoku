@@ -218,9 +218,17 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const id = await insertSeries(db, stamped);
     // `id` last: the row id SQLite just assigned must win over any stale id
     // riding along on the input, otherwise lookups by id miss the series.
-    const series = [...get().series, { ...stamped, addedAt, id }].sort((a, b) =>
-      a.title.localeCompare(b.title),
-    );
+    // The optional halves of NewSeries settle to null, matching what a reload
+    // would read back from SQLite.
+    const row: Series = {
+      ...stamped,
+      description: stamped.description ?? null,
+      publisher: stamped.publisher ?? null,
+      publishedYear: stamped.publishedYear ?? null,
+      addedAt,
+      id,
+    };
+    const series = [...get().series, row].sort((a, b) => a.title.localeCompare(b.title));
     set({
       series,
       volumesBySeriesId: { ...get().volumesBySeriesId, [id]: [] },
@@ -236,7 +244,22 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
 
     // 1. A series already in the library wins: the scan fills one of its tomes
     //    rather than standing up a duplicate alongside it.
-    let seriesId = get().series.find((s) => normalizeTitle(s.title) === key)?.id ?? null;
+    const existingSeries = get().series.find((s) => normalizeTitle(s.title) === key);
+    let seriesId = existingSeries?.id ?? null;
+
+    // Series created before this metadata existed (or scanned back when we only
+    // kept page counts) carry empty genres and no synopsis. A rescan is the
+    // natural moment to backfill them — but only gaps, so AniList genres and an
+    // edited synopsis are never overwritten by sparser Google Books data.
+    if (existingSeries) {
+      const patch: Partial<NewSeries> = {};
+      if (existingSeries.genres.length === 0 && meta.genres.length > 0) patch.genres = meta.genres;
+      if (!existingSeries.description && meta.description) patch.description = meta.description;
+      if (!existingSeries.publisher && meta.publisher) patch.publisher = meta.publisher;
+      if (existingSeries.publishedYear == null && meta.publishedYear != null)
+        patch.publishedYear = meta.publishedYear;
+      if (Object.keys(patch).length > 0) await updateSeries(db, existingSeries.id, patch);
+    }
 
     // 2. Otherwise let AniList identify the work, so a scanned manga lands as a
     //    manga with its real tome count instead of a one-tome "novel".
@@ -250,7 +273,11 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         candidate = undefined;
       }
       if (candidate) {
-        seriesId = await insertSeries(db, { ...candidate.series, addedAt: now() });
+        seriesId = await insertSeries(db, {
+          ...candidate.series,
+          description: candidate.description,
+          addedAt: now(),
+        });
       }
     }
 
@@ -265,9 +292,12 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         totalVolumes: 1,
         externalIds: {},
         coverUrl: meta.coverUrl,
-        genres: [],
+        genres: meta.genres,
         status: 'reading',
         addedAt: now(),
+        description: meta.description,
+        publisher: meta.publisher,
+        publishedYear: meta.publishedYear,
       });
     }
 
@@ -326,6 +356,10 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         status: s.status,
         // Preserve the original add date — stamping now() would destroy the real order.
         addedAt: s.addedAt ?? null,
+        // Backups written before migration 5 carry none of these.
+        description: s.description ?? null,
+        publisher: s.publisher ?? null,
+        publishedYear: s.publishedYear ?? null,
       });
       for (const v of data.volumesBySeriesId[s.id] ?? []) {
         await insertVolume(db, {

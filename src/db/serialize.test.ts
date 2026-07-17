@@ -20,6 +20,9 @@ describe('serialize', () => {
       genres: '["Seinen","Dark Fantasy"]',
       status: 'reading',
       added_at: null,
+      description: 'Guts wields a very large sword.',
+      publisher: 'Hakusensha',
+      published_year: 1990,
     });
     expect(series).toEqual({
       id: 7,
@@ -32,6 +35,9 @@ describe('serialize', () => {
       genres: ['Seinen', 'Dark Fantasy'],
       status: 'reading',
       addedAt: null,
+      description: 'Guts wields a very large sword.',
+      publisher: 'Hakusensha',
+      publishedYear: 1990,
     });
   });
 
@@ -47,6 +53,9 @@ describe('serialize', () => {
       genres: '[]',
       status: 'reading',
       added_at: '2026-07-17T10:30:00.000Z',
+      description: null,
+      publisher: null,
+      published_year: null,
     };
     expect(rowToSeries(row).addedAt).toBe('2026-07-17T10:30:00.000Z');
   });
@@ -63,6 +72,9 @@ describe('serialize', () => {
       genres: '[]',
       status: 'reading',
       added_at: null,
+      description: null,
+      publisher: null,
+      published_year: null,
     };
     expect(rowToSeries(row).addedAt).toBeNull();
   });
@@ -117,10 +129,13 @@ describe('serialize', () => {
       '["Fantasy"]',
       'reading',
       null,
+      null,
+      null,
+      null,
     ]);
   });
 
-  it('seriesInsertParams appends addedAt last, coalescing an absent one to null', () => {
+  it('seriesInsertParams coalesces absent addedAt and Google Books fields to null', () => {
     const base: NewSeries = {
       title: 'Frieren',
       author: 'Kanehito Yamada',
@@ -131,10 +146,17 @@ describe('serialize', () => {
       genres: ['Fantasy'],
       status: 'reading',
     };
-    expect(seriesInsertParams(base).at(-1)).toBeNull();
-    expect(seriesInsertParams({ ...base, addedAt: '2026-07-17T10:30:00.000Z' }).at(-1)).toBe(
-      '2026-07-17T10:30:00.000Z',
-    );
+    // Column order: ..., status(7), added_at(8), description(9), publisher(10), published_year(11)
+    expect(seriesInsertParams(base).slice(8)).toEqual([null, null, null, null]);
+    expect(
+      seriesInsertParams({
+        ...base,
+        addedAt: '2026-07-17T10:30:00.000Z',
+        description: 'A quiet elf.',
+        publisher: 'Shogakukan',
+        publishedYear: 2020,
+      }).slice(8),
+    ).toEqual(['2026-07-17T10:30:00.000Z', 'A quiet elf.', 'Shogakukan', 2020]);
   });
 
   it('volumeInsertParams produces params in column order with nulls', () => {

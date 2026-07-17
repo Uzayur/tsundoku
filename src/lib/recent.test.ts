@@ -13,6 +13,9 @@ function makeSeries(id: number, addedAt: string | null, title = `S${id}`): Serie
     genres: [],
     status: 'reading',
     addedAt,
+    description: null,
+    publisher: null,
+    publishedYear: null,
   };
 }
 

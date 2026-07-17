@@ -11,6 +11,9 @@ export interface SeriesRow {
   genres: string;
   status: string;
   added_at: string | null;
+  description: string | null;
+  publisher: string | null;
+  published_year: number | null;
 }
 
 export interface VolumeRow {
@@ -39,6 +42,9 @@ export function rowToSeries(r: SeriesRow): Series {
     genres: JSON.parse(r.genres) as string[],
     status: r.status as Series['status'],
     addedAt: r.added_at,
+    description: r.description ?? null,
+    publisher: r.publisher ?? null,
+    publishedYear: r.published_year ?? null,
   };
 }
 
@@ -58,7 +64,7 @@ export function rowToVolume(r: VolumeRow): Volume {
   };
 }
 
-/** Column order: title, author, type, total_volumes, external_ids, cover_url, genres, status, added_at */
+/** Column order: title, author, type, total_volumes, external_ids, cover_url, genres, status, added_at, description, publisher, published_year */
 export function seriesInsertParams(s: NewSeries): unknown[] {
   return [
     s.title,
@@ -70,6 +76,9 @@ export function seriesInsertParams(s: NewSeries): unknown[] {
     JSON.stringify(s.genres ?? []),
     s.status,
     s.addedAt ?? null,
+    s.description ?? null,
+    s.publisher ?? null,
+    s.publishedYear ?? null,
   ];
 }
 

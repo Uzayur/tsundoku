@@ -53,13 +53,41 @@ describe('series queries', () => {
     const db = await freshDb();
     const id = await insertSeries(db, sampleSeries);
     const got = await getSeries(db, id);
-    expect(got).toEqual({ id, ...sampleSeries, addedAt: null });
+    expect(got).toEqual({
+      id,
+      ...sampleSeries,
+      addedAt: null,
+      description: null,
+      publisher: null,
+      publishedYear: null,
+    });
   });
 
   it('round-trips addedAt', async () => {
     const db = await freshDb();
     const id = await insertSeries(db, { ...sampleSeries, addedAt: '2026-07-17T10:30:00.000Z' });
     expect((await getSeries(db, id))?.addedAt).toBe('2026-07-17T10:30:00.000Z');
+  });
+
+  it('round-trips description, publisher and publishedYear', async () => {
+    const db = await freshDb();
+    const id = await insertSeries(db, {
+      ...sampleSeries,
+      description: 'A devil hunter.',
+      publisher: 'Shueisha',
+      publishedYear: 2018,
+    });
+    const got = await getSeries(db, id);
+    expect(got?.description).toBe('A devil hunter.');
+    expect(got?.publisher).toBe('Shueisha');
+    expect(got?.publishedYear).toBe(2018);
+  });
+
+  it('updateSeries patches the description', async () => {
+    const db = await freshDb();
+    const id = await insertSeries(db, sampleSeries);
+    await updateSeries(db, id, { description: 'Edited synopsis.' });
+    expect((await getSeries(db, id))?.description).toBe('Edited synopsis.');
   });
 
   it('stores a null addedAt when the insert omits it', async () => {

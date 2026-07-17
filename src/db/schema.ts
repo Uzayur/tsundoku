@@ -44,7 +44,19 @@ const MIGRATION_4 = `
 ALTER TABLE series ADD COLUMN added_at TEXT;
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
+const MIGRATION_5 = `
+ALTER TABLE series ADD COLUMN description TEXT;
+ALTER TABLE series ADD COLUMN publisher TEXT;
+ALTER TABLE series ADD COLUMN published_year INTEGER;
+`;
+
+export const MIGRATIONS: string[] = [
+  MIGRATION_1,
+  MIGRATION_2,
+  MIGRATION_3,
+  MIGRATION_4,
+  MIGRATION_5,
+];
 
 export async function migrate(db: Db): Promise<void> {
   const row = await db.getFirst<{ user_version: number }>('PRAGMA user_version');

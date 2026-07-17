@@ -19,7 +19,8 @@ import { PagePrompt } from '~/src/components/ui/PagePrompt';
 import { ProgressBar } from '~/src/components/ui/ProgressBar';
 import { VolumeCell } from '~/src/components/ui/VolumeCell';
 import { VolumeSheet } from '~/src/components/ui/VolumeSheet';
-import { SeriesStatus, SeriesType } from '~/src/db/models';
+import { SeriesStatus, SeriesType, Volume } from '~/src/db/models';
+import { translateGenre } from '~/src/lib/genres';
 import { progressFraction, readCount } from '~/src/lib/progress';
 import { LEGEND_STATES, SlotState, STATUS_LABEL, STATUS_STYLE } from '~/src/lib/volumeStatus';
 import { useLibrary } from '~/src/store/useLibrary';
@@ -44,6 +45,9 @@ const TYPES: SeriesType[] = ['manga', 'novel', 'bd', 'comic'];
 const GRID_COLUMNS = 5;
 const GRID_GAP = 9;
 
+// Stable reference: a fresh [] in the selector would never compare equal.
+const NO_VOLUMES: Volume[] = [];
+
 export default function SeriesDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const seriesId = Number(id);
@@ -51,7 +55,7 @@ export default function SeriesDetailScreen() {
   const { width } = useWindowDimensions();
 
   const series = useLibrary((s) => s.series.find((x) => x.id === seriesId));
-  const volumes = useLibrary((s) => s.volumesBySeriesId[seriesId] ?? []);
+  const volumes = useLibrary((s) => s.volumesBySeriesId[seriesId] ?? NO_VOLUMES);
   const setVolumeState = useLibrary((s) => s.setVolumeState);
   const setVolumeCurrentPage = useLibrary((s) => s.setVolumeCurrentPage);
   const updateSeriesType = useLibrary((s) => s.updateSeriesType);
@@ -61,6 +65,7 @@ export default function SeriesDetailScreen() {
 
   const [sheetTome, setSheetTome] = useState<number | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
+  const [synopsisOpen, setSynopsisOpen] = useState(false);
 
   const onDelete = () => {
     Alert.alert('Supprimer la série ?', 'Cette action est irréversible.', [
@@ -93,6 +98,9 @@ export default function SeriesDetailScreen() {
     volumes.find((v) => v.number === n)?.status ?? 'missing';
 
   const cellWidth = (width - theme.screenPadX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+
+  // Either half may be missing depending on what the scan turned up.
+  const imprint = [series.publisher, series.publishedYear].filter(Boolean).join(' · ');
 
   // Single-tome works (e.g. romans) track pages, not tomes.
   const singleVolume = total === 1;
@@ -128,12 +136,35 @@ export default function SeriesDetailScreen() {
               <Text style={styles.heroType}>{TYPE_LABEL[series.type]}</Text>
               <Ionicons name="chevron-down" size={14} color={theme.muted} />
             </Pressable>
+            {imprint ? <Text style={styles.heroImprint}>{imprint}</Text> : null}
             <View style={styles.badges}>
               <Badge label={SERIES_STATUS_LABEL[series.status]} tone="reading" />
               <Badge label={`${ownedCount} possédés`} tone="owned" />
             </View>
           </View>
         </View>
+
+        {series.genres.length > 0 ? (
+          <View style={styles.genres}>
+            {series.genres.map((genre) => (
+              <Badge key={genre} label={translateGenre(genre)} tone="neutral" />
+            ))}
+          </View>
+        ) : null}
+
+        {series.description ? (
+          <Pressable
+            style={styles.synopsis}
+            onPress={() => setSynopsisOpen((open) => !open)}
+            hitSlop={4}
+          >
+            <Text style={styles.synopsisLabel}>Résumé</Text>
+            <Text style={styles.synopsisText} numberOfLines={synopsisOpen ? undefined : 4}>
+              {series.description}
+            </Text>
+            <Text style={styles.synopsisMore}>{synopsisOpen ? 'Réduire' : 'Lire la suite'}</Text>
+          </Pressable>
+        ) : null}
 
         {singleVolume ? (
           <>
@@ -278,7 +309,37 @@ const styles = StyleSheet.create({
   heroAuthor: { fontFamily: theme.font.medium, fontSize: 13, color: theme.sub, marginTop: 4 },
   typeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   heroType: { fontFamily: theme.font.medium, fontSize: 13, color: theme.muted },
+  heroImprint: { fontFamily: theme.font.regular, fontSize: 12, color: theme.sub, marginTop: 4 },
   badges: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: 10 },
+  genres: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  synopsis: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.radiusLg,
+    borderWidth: 1,
+    borderColor: theme.line,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
+  },
+  synopsisLabel: {
+    fontFamily: theme.font.bold,
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: theme.muted,
+    marginBottom: theme.spacing.sm,
+  },
+  synopsisText: { fontFamily: theme.font.regular, fontSize: 13, lineHeight: 20, color: theme.ink },
+  synopsisMore: {
+    fontFamily: theme.font.bold,
+    fontSize: 12,
+    color: theme.accent,
+    marginTop: theme.spacing.sm,
+  },
   progressCard: {
     flexDirection: 'row',
     alignItems: 'center',
