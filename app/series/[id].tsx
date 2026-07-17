@@ -104,6 +104,7 @@ export default function SeriesDetailScreen() {
 
   // Single-tome works (e.g. romans) track pages, not tomes.
   const singleVolume = total === 1;
+  const isNovel = series.type === 'novel';
   const vol1 = volumes.find((v) => v.number === 1);
   const pageTotal = vol1?.pageCount ?? null;
   const currentPage = vol1?.status === 'read' && pageTotal ? pageTotal : (vol1?.currentPage ?? 0);
@@ -138,8 +139,16 @@ export default function SeriesDetailScreen() {
             </Pressable>
             {imprint ? <Text style={styles.heroImprint}>{imprint}</Text> : null}
             <View style={styles.badges}>
-              <Badge label={SERIES_STATUS_LABEL[series.status]} tone="reading" />
-              <Badge label={`${ownedCount} possédés`} tone="owned" />
+              {isNovel ? (
+                series.status === 'reading' ? (
+                  <Badge label={SERIES_STATUS_LABEL.reading} tone="reading" />
+                ) : null
+              ) : (
+                <>
+                  <Badge label={SERIES_STATUS_LABEL[series.status]} tone="reading" />
+                  <Badge label={`${ownedCount} possédés`} tone="owned" />
+                </>
+              )}
             </View>
           </View>
         </View>
