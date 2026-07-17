@@ -61,6 +61,14 @@ export function totalBooksRead(volumes: Volume[]): number {
   return volumes.filter(isRead).length;
 }
 
+/**
+ * Count of volumes currently being read. Unlike the other counters this is a
+ * snapshot of right now, not a lifetime total, so it needs no finishedAt.
+ */
+export function booksInProgress(volumes: Volume[]): number {
+  return volumes.filter((volume) => volume.status === 'reading').length;
+}
+
 /** Sum of pageCount (null treated as 0) over read volumes with a finishedAt date. */
 export function totalPagesRead(volumes: Volume[]): number {
   return volumes.filter(isRead).reduce((sum, volume) => sum + (volume.pageCount ?? 0), 0);

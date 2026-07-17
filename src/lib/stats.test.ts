@@ -1,6 +1,7 @@
 import { Series, Volume } from '~/src/db/models';
 import {
   aggregate,
+  booksInProgress,
   pagesPerBook,
   periodKey,
   topSeries,
@@ -143,6 +144,24 @@ describe('totalBooksRead', () => {
       makeVolume({ id: 4, status: 'reading', finishedAt: '2026-02-01' }),
     ];
     expect(totalBooksRead(volumes)).toBe(2);
+  });
+});
+
+describe('booksInProgress', () => {
+  it('counts volumes currently being read, whatever their page or date', () => {
+    const volumes: Volume[] = [
+      makeVolume({ id: 1, status: 'reading', currentPage: 80, finishedAt: null }),
+      makeVolume({ id: 2, status: 'reading', currentPage: null, finishedAt: null }),
+      makeVolume({ id: 3, status: 'read', finishedAt: '2026-01-01' }),
+      makeVolume({ id: 4, status: 'owned', finishedAt: null }),
+      makeVolume({ id: 5, status: 'wishlist', finishedAt: null }),
+    ];
+    expect(booksInProgress(volumes)).toBe(2);
+  });
+
+  it('returns 0 when nothing is being read', () => {
+    expect(booksInProgress([makeVolume({ id: 1, status: 'owned' })])).toBe(0);
+    expect(booksInProgress([])).toBe(0);
   });
 });
 

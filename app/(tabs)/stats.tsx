@@ -12,6 +12,7 @@ import { SeriesType, Volume } from '~/src/db/models';
 import { readCount } from '~/src/lib/progress';
 import {
   aggregate,
+  booksInProgress,
   pagesPerBook,
   Period,
   topSeries,
@@ -85,11 +86,16 @@ export default function StatsScreen() {
 
         <View style={styles.cardsRow}>
           <StatCard value={totalBooksRead(allVolumes)} label="Livres lus" />
+          <StatCard value={booksInProgress(allVolumes)} label="En cours" />
+        </View>
+        <View style={styles.cardsRow}>
           <StatCard value={totalPagesRead(allVolumes)} label="Pages lues" />
+          <StatCard value={pagesPerBook(allVolumes)} label="Pages / livre" />
         </View>
         <View style={styles.cardsRow}>
           <StatCard value={series.length} label="Séries suivies" />
-          <StatCard value={pagesPerBook(allVolumes)} label="Pages / livre" />
+          {/* Keeps the odd card at grid width instead of stretching it full-bleed. */}
+          <View style={styles.cardSpacer} />
         </View>
 
         <SectionTitle>Livres lus par période</SectionTitle>
@@ -186,6 +192,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.screenPadX,
     paddingBottom: theme.tabBarClearance,
   },
+  cardSpacer: { flex: 1 },
   cardsRow: {
     flexDirection: 'row',
     gap: 12,
