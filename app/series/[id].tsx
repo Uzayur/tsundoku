@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge } from '~/src/components/ui/Badge';
 import { Cover } from '~/src/components/ui/Cover';
 import { OptionsSheet } from '~/src/components/ui/OptionsSheet';
+import { PagePrompt } from '~/src/components/ui/PagePrompt';
 import { ProgressBar } from '~/src/components/ui/ProgressBar';
 import { VolumeCell } from '~/src/components/ui/VolumeCell';
 import { VolumeSheet } from '~/src/components/ui/VolumeSheet';
@@ -55,6 +56,8 @@ export default function SeriesDetailScreen() {
   const setVolumeCurrentPage = useLibrary((s) => s.setVolumeCurrentPage);
   const updateSeriesType = useLibrary((s) => s.updateSeriesType);
   const removeSeries = useLibrary((s) => s.removeSeries);
+  const pendingPages = useLibrary((s) => s.pendingPages);
+  const resolvePendingPages = useLibrary((s) => s.resolvePendingPages);
 
   const [sheetTome, setSheetTome] = useState<number | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
@@ -229,6 +232,13 @@ export default function SeriesDetailScreen() {
           label: TYPE_LABEL[t],
           onPress: () => updateSeriesType(seriesId, t),
         }))}
+      />
+
+      <PagePrompt
+        visible={pendingPages != null}
+        title={`Tome ${pendingPages?.number ?? ''}`}
+        onSubmit={(pages) => resolvePendingPages(pages)}
+        onSkip={() => resolvePendingPages(null)}
       />
     </View>
   );

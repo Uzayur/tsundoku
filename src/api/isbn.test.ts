@@ -245,7 +245,9 @@ describe('lookupIsbn page count fallback', () => {
         ? {
             ok: true,
             status: 200,
-            json: async () => ({ [`ISBN:${ISBN}`]: { title: 'Tome inconnu', number_of_pages: null } }),
+            json: async () => ({
+              [`ISBN:${ISBN}`]: { title: 'Tome inconnu', number_of_pages: null },
+            }),
           }
         : { ok: false, status: 429, json: async () => ({}) };
 

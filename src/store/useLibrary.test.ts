@@ -150,9 +150,7 @@ describe('setVolumeCurrentPage', () => {
 
 describe('setVolumeState page count resolution', () => {
   async function seedSeries(overrides: Partial<Series> = {}): Promise<number> {
-    return useLibrary
-      .getState()
-      .addSeries(makeSeries({ id: 0, title: 'One Piece', ...overrides }));
+    return useLibrary.getState().addSeries(makeSeries({ id: 0, title: 'One Piece', ...overrides }));
   }
 
   it('resolves a page count from the series title when a tome is created', async () => {
