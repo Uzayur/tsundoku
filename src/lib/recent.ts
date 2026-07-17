@@ -25,8 +25,10 @@ export function recentlyAdded(series: Series[], limit = 3): Series[] {
       if (a.addedAt === null && b.addedAt === null) return b.id - a.id;
       if (a.addedAt === null) return 1;
       if (b.addedAt === null) return -1;
-      // ISO timestamps sort correctly as strings.
-      return b.addedAt.localeCompare(a.addedAt) || b.id - a.id;
+      // ISO timestamps sort correctly by codepoint — no need for ICU collation.
+      if (a.addedAt > b.addedAt) return -1;
+      if (a.addedAt < b.addedAt) return 1;
+      return b.id - a.id;
     })
     .slice(0, limit);
 }
@@ -53,6 +55,11 @@ export function recentlyRead(
   }
 
   return entries
-    .sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt) || b.series.id - a.series.id)
+    .sort((a, b) => {
+      // ISO timestamps sort correctly by codepoint — no need for ICU collation.
+      if (a.lastReadAt > b.lastReadAt) return -1;
+      if (a.lastReadAt < b.lastReadAt) return 1;
+      return b.series.id - a.series.id;
+    })
     .slice(0, limit);
 }
