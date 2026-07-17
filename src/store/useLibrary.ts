@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { fetchSeries, SeriesSearchResult } from '~/src/api/anilist';
 import { BookMetadata } from '~/src/api/isbn';
+import { lookupPagesByTitle } from '~/src/api/openlibrary';
 import { BackupData } from '~/src/lib/backup';
 import { getCached, setCached } from '~/src/db/cache';
 import { openDatabase } from '~/src/db/expoClient';
@@ -15,6 +16,7 @@ import {
   listVolumes,
   setVolumeCurrentPage,
   setVolumeFinishedAt,
+  setVolumePageCount,
   setVolumeStatus,
   updateSeries,
 } from '~/src/db/queries';
@@ -22,14 +24,19 @@ import { SlotState } from '~/src/lib/volumeStatus';
 
 const now = () => new Date().toISOString();
 
-function newVolume(seriesId: number, number: number, status: VolumeStatus): Volume {
+function newVolume(
+  seriesId: number,
+  number: number,
+  status: VolumeStatus,
+  pageCount: number | null = null,
+): Volume {
   return {
     id: 0,
     seriesId,
     number,
     isbn: null,
     title: null,
-    pageCount: null,
+    pageCount,
     coverUrl: null,
     status,
     currentPage: null,
@@ -45,6 +52,9 @@ interface LibraryState {
   searchResults: SeriesSearchResult[];
   searching: boolean;
   searchError: string | null;
+  /** Set when a tome was marked read but no source knew its length. */
+  pendingPages: { seriesId: number; number: number } | null;
+  resolvePendingPages: (pages: number | null) => Promise<void>;
   load: () => Promise<void>;
   setVolumeState: (
     seriesId: number,
@@ -68,6 +78,35 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
   searchResults: [],
   searching: false,
   searchError: null,
+  pendingPages: null,
+
+  resolvePendingPages: async (pages) => {
+    const pending = get().pendingPages;
+    if (!pending) {
+      return;
+    }
+    set({ pendingPages: null });
+    if (pages == null) {
+      return;
+    }
+
+    const db = await openDatabase();
+    const volumes = get().volumesBySeriesId[pending.seriesId] ?? [];
+    const target = volumes.find((v) => v.number === pending.number);
+    if (!target) {
+      return;
+    }
+
+    await setVolumePageCount(db, target.id, pages);
+    set({
+      volumesBySeriesId: {
+        ...get().volumesBySeriesId,
+        [pending.seriesId]: volumes.map((v) =>
+          v.id === target.id ? { ...v, pageCount: pages } : v,
+        ),
+      },
+    });
+  },
 
   load: async () => {
     const db = await openDatabase();
@@ -102,9 +141,17 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         await setVolumeFinishedAt(db, existing.id, finishedAt);
         volumes = volumes.map((v) => (v.id === existing.id ? { ...v, status, finishedAt } : v));
       } else {
-        const draft = newVolume(seriesId, n, status);
+        // A tome born from the grid never saw an ISBN, so its length has to be
+        // resolved from the series title — and asked for when nothing knows it,
+        // otherwise it would silently count as 0 pages towards the stats.
+        const series = get().series.find((s) => s.id === seriesId);
+        const pages = series ? await lookupPagesByTitle(series.title, n) : null;
+        const draft = newVolume(seriesId, n, status, pages);
         const id = await insertVolume(db, draft);
         volumes = [...volumes, { ...draft, id }];
+        if (pages == null && status === 'read') {
+          set({ pendingPages: { seriesId, number: n } });
+        }
       }
     }
 
@@ -168,7 +215,9 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const addedAt = now();
     const stamped: NewSeries = { ...input, addedAt };
     const id = await insertSeries(db, stamped);
-    const series = [...get().series, { id, ...stamped, addedAt }].sort((a, b) =>
+    // `id` last: the row id SQLite just assigned must win over any stale id
+    // riding along on the input, otherwise lookups by id miss the series.
+    const series = [...get().series, { ...stamped, addedAt, id }].sort((a, b) =>
       a.title.localeCompare(b.title),
     );
     set({

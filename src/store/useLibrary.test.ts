@@ -13,6 +13,11 @@ jest.mock('~/src/db/expoClient', () => ({
   openDatabase: () => Promise.resolve(testDb),
 }));
 
+// Creating a tome resolves its length over the network; keep the suite offline.
+jest.mock('~/src/api/openlibrary', () => ({ lookupPagesByTitle: jest.fn() }));
+
+// eslint-disable-next-line import/first -- must come after the jest.mock above
+import { lookupPagesByTitle } from '~/src/api/openlibrary';
 // eslint-disable-next-line import/first -- must come after the jest.mock above
 import { useLibrary } from '~/src/store/useLibrary';
 
@@ -33,6 +38,9 @@ function makeSeries(overrides: Partial<Series> & { id: number; title: string }):
 beforeEach(async () => {
   testDb = createTestDb();
   await migrate(testDb);
+  jest.mocked(lookupPagesByTitle).mockReset();
+  jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
+  useLibrary.setState({ series: [], volumesBySeriesId: {}, pendingPages: null });
 });
 
 describe('importBackup', () => {
@@ -129,5 +137,79 @@ describe('setVolumeCurrentPage', () => {
 
     expect(vol1(seriesId).status).toBe('read');
     expect(vol1(seriesId).finishedAt).not.toBeNull();
+  });
+});
+
+describe('setVolumeState page count resolution', () => {
+  async function seedSeries(overrides: Partial<Series> = {}): Promise<number> {
+    return useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'One Piece', ...overrides }));
+  }
+
+  it('resolves a page count from the series title when a tome is created', async () => {
+    jest.mocked(lookupPagesByTitle).mockResolvedValue(208);
+    const seriesId = await seedSeries();
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    expect(useLibrary.getState().volumesBySeriesId[seriesId][0].pageCount).toBe(208);
+    expect(lookupPagesByTitle).toHaveBeenCalledWith('One Piece', 1);
+  });
+
+  it('flags the tome for manual entry when no source knows it', async () => {
+    jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
+    const seriesId = await seedSeries({ title: 'Série obscure' });
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    expect(useLibrary.getState().volumesBySeriesId[seriesId][0].pageCount).toBeNull();
+    expect(useLibrary.getState().pendingPages).toEqual({ seriesId, number: 1 });
+  });
+
+  it('does not ask for pages when the tome is only marked owned', async () => {
+    jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
+    const seriesId = await seedSeries();
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
+
+    expect(useLibrary.getState().pendingPages).toBeNull();
+  });
+
+  it('persists a manually entered page count', async () => {
+    jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
+    const seriesId = await seedSeries();
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    await useLibrary.getState().resolvePendingPages(180);
+
+    expect(useLibrary.getState().volumesBySeriesId[seriesId][0].pageCount).toBe(180);
+    expect(useLibrary.getState().pendingPages).toBeNull();
+    // The value must survive a reload, not just live in memory.
+    await useLibrary.getState().load();
+    expect(useLibrary.getState().volumesBySeriesId[seriesId][0].pageCount).toBe(180);
+  });
+
+  it('clears the prompt without writing when the user skips', async () => {
+    jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
+    const seriesId = await seedSeries();
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    await useLibrary.getState().resolvePendingPages(null);
+
+    expect(useLibrary.getState().pendingPages).toBeNull();
+    expect(useLibrary.getState().volumesBySeriesId[seriesId][0].pageCount).toBeNull();
+  });
+
+  it('keeps the page count of an existing tome instead of looking it up again', async () => {
+    jest.mocked(lookupPagesByTitle).mockResolvedValue(200);
+    const seriesId = await seedSeries();
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
+    jest.mocked(lookupPagesByTitle).mockClear();
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    expect(lookupPagesByTitle).not.toHaveBeenCalled();
+    expect(useLibrary.getState().volumesBySeriesId[seriesId][0].pageCount).toBe(200);
   });
 });
