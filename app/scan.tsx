@@ -5,17 +5,28 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BookMetadata, lookupIsbn } from '~/src/api/isbn';
+import { Badge, BadgeTone } from '~/src/components/ui/Badge';
 import { Cover } from '~/src/components/ui/Cover';
 import { VolumeSheet } from '~/src/components/ui/VolumeSheet';
 import { VolumeStatus } from '~/src/db/models';
-import { SlotState } from '~/src/lib/volumeStatus';
+import { normalizeTitle, parseVolumeTitle } from '~/src/lib/volumeTitle';
+import { SlotState, STATUS_LABEL } from '~/src/lib/volumeStatus';
 import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
+
+const STATUS_TONE: Record<VolumeStatus, BadgeTone> = {
+  read: 'read',
+  reading: 'reading',
+  owned: 'owned',
+  wishlist: 'wish',
+};
 
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const addBook = useLibrary((s) => s.addBook);
+  const series = useLibrary((s) => s.series);
+  const volumesBySeriesId = useLibrary((s) => s.volumesBySeriesId);
 
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<BookMetadata | null>(null);
@@ -73,6 +84,17 @@ export default function ScanScreen() {
 
   const previewTitle = preview?.title ?? preview?.isbn ?? '';
   const previewAuthor = preview?.authors[0] ?? null;
+
+  // Does this exact tome already sit in the library? Mirror addBook's matching
+  // (normalized series title + tome number) so the preview can flag a re-scan.
+  const existing = (() => {
+    if (!preview) return null;
+    const { baseTitle, number } = parseVolumeTitle(preview.title ?? preview.isbn);
+    const key = normalizeTitle(baseTitle);
+    const match = series.find((s) => normalizeTitle(s.title) === key);
+    if (!match) return null;
+    return (volumesBySeriesId[match.id] ?? []).find((v) => v.number === (number ?? 1)) ?? null;
+  })();
   const previewMeta = preview
     ? [
         preview.publisher,
@@ -155,6 +177,14 @@ export default function ScanScreen() {
                   {previewMeta}
                 </Text>
               ) : null}
+              {existing ? (
+                <View style={styles.previewBadge}>
+                  <Badge
+                    label={`Déjà dans ta bibliothèque · ${STATUS_LABEL[existing.status]}`}
+                    tone={STATUS_TONE[existing.status]}
+                  />
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -232,6 +262,7 @@ const styles = StyleSheet.create({
   previewTitle: { fontFamily: theme.font.bold, fontSize: 17, color: theme.ink },
   previewAuthor: { fontFamily: theme.font.medium, fontSize: 13, color: theme.sub },
   previewMeta: { fontFamily: theme.font.regular, fontSize: 12, color: theme.muted },
+  previewBadge: { marginTop: 4 },
   addBtn: {
     backgroundColor: theme.accent,
     borderRadius: theme.radiusSm,
