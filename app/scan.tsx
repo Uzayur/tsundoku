@@ -78,8 +78,8 @@ export default function ScanScreen() {
 
   const onSelect = (target: SlotState) => {
     // 'missing' can't occur here (the sheet hides "Supprimer" while adding); the
-    // rest map straight onto a volume status.
-    if (target !== 'missing' && target !== 'reading') save(target);
+    // rest — including a page-less "En cours" — map straight onto a volume status.
+    if (target !== 'missing') save(target);
   };
 
   const previewTitle = preview?.title ?? preview?.isbn ?? '';

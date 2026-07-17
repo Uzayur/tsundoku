@@ -46,6 +46,12 @@ export function VolumeSheet({
     reset();
   };
   const confirmPage = () => {
+    // An empty field means "en cours" without a page — just set the status.
+    if (page.trim() === '') {
+      onSelect('reading');
+      reset();
+      return;
+    }
     const n = parseInt(page, 10);
     if (!Number.isNaN(n) && n > 0) {
       onSetPage(n);
@@ -75,7 +81,7 @@ export function VolumeSheet({
                 value={page}
                 onChangeText={setPage}
                 keyboardType="number-pad"
-                placeholder="Page actuelle"
+                placeholder="Page actuelle (facultatif)"
                 placeholderTextColor={theme.muted}
                 autoFocus
                 onSubmitEditing={confirmPage}
