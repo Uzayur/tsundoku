@@ -2,6 +2,7 @@ import { NewSeries, NewVolume } from '~/src/db/models';
 import {
   rowToSeries,
   rowToVolume,
+  SeriesRow,
   seriesInsertParams,
   volumeInsertParams,
 } from '~/src/db/serialize';
@@ -18,6 +19,7 @@ describe('serialize', () => {
       cover_url: null,
       genres: '["Seinen","Dark Fantasy"]',
       status: 'reading',
+      added_at: null,
     });
     expect(series).toEqual({
       id: 7,
@@ -29,7 +31,40 @@ describe('serialize', () => {
       coverUrl: null,
       genres: ['Seinen', 'Dark Fantasy'],
       status: 'reading',
+      addedAt: null,
     });
+  });
+
+  it('rowToSeries maps added_at to addedAt', () => {
+    const row: SeriesRow = {
+      id: 1,
+      title: 'Frieren',
+      author: 'Kanehito Yamada',
+      type: 'manga',
+      total_volumes: 13,
+      external_ids: '{}',
+      cover_url: null,
+      genres: '[]',
+      status: 'reading',
+      added_at: '2026-07-17T10:30:00.000Z',
+    };
+    expect(rowToSeries(row).addedAt).toBe('2026-07-17T10:30:00.000Z');
+  });
+
+  it('rowToSeries maps a null added_at to null', () => {
+    const row: SeriesRow = {
+      id: 1,
+      title: 'Frieren',
+      author: 'Kanehito Yamada',
+      type: 'manga',
+      total_volumes: 13,
+      external_ids: '{}',
+      cover_url: null,
+      genres: '[]',
+      status: 'reading',
+      added_at: null,
+    };
+    expect(rowToSeries(row).addedAt).toBeNull();
   });
 
   it('rowToVolume maps all fields including nulls', () => {
@@ -81,7 +116,25 @@ describe('serialize', () => {
       null,
       '["Fantasy"]',
       'reading',
+      null,
     ]);
+  });
+
+  it('seriesInsertParams appends addedAt last, coalescing an absent one to null', () => {
+    const base: NewSeries = {
+      title: 'Frieren',
+      author: 'Kanehito Yamada',
+      type: 'manga',
+      totalVolumes: null,
+      externalIds: { anilist: 118586 },
+      coverUrl: null,
+      genres: ['Fantasy'],
+      status: 'reading',
+    };
+    expect(seriesInsertParams(base).at(-1)).toBeNull();
+    expect(seriesInsertParams({ ...base, addedAt: '2026-07-17T10:30:00.000Z' }).at(-1)).toBe(
+      '2026-07-17T10:30:00.000Z',
+    );
   });
 
   it('volumeInsertParams produces params in column order with nulls', () => {

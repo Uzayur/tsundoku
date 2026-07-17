@@ -20,6 +20,7 @@ function makeSeries(overrides: Partial<Series> = {}): Series {
     coverUrl: null,
     genres: [],
     status: 'reading',
+    addedAt: null,
     ...overrides,
   };
 }

@@ -13,6 +13,7 @@ function makeFixture(): BackupData {
       coverUrl: null,
       genres: ['Fantasy', 'Romance'],
       status: 'reading',
+      addedAt: null,
     },
     {
       id: 2,
@@ -24,6 +25,7 @@ function makeFixture(): BackupData {
       coverUrl: null,
       genres: ['Fantasy'],
       status: 'planned',
+      addedAt: null,
     },
   ];
 

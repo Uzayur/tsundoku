@@ -53,7 +53,19 @@ describe('series queries', () => {
     const db = await freshDb();
     const id = await insertSeries(db, sampleSeries);
     const got = await getSeries(db, id);
-    expect(got).toEqual({ id, ...sampleSeries });
+    expect(got).toEqual({ id, ...sampleSeries, addedAt: null });
+  });
+
+  it('round-trips addedAt', async () => {
+    const db = await freshDb();
+    const id = await insertSeries(db, { ...sampleSeries, addedAt: '2026-07-17T10:30:00.000Z' });
+    expect((await getSeries(db, id))?.addedAt).toBe('2026-07-17T10:30:00.000Z');
+  });
+
+  it('stores a null addedAt when the insert omits it', async () => {
+    const db = await freshDb();
+    const id = await insertSeries(db, sampleSeries);
+    expect((await getSeries(db, id))?.addedAt).toBeNull();
   });
 
   it('getSeries returns null for a missing id', async () => {

@@ -12,6 +12,8 @@ export interface Series {
   coverUrl: string | null;
   genres: string[];
   status: SeriesStatus;
+  /** Full ISO timestamp of when the series was added. Null for rows predating migration 4. */
+  addedAt: string | null;
 }
 
 export interface Volume {
@@ -28,5 +30,5 @@ export interface Volume {
   finishedAt: string | null;
 }
 
-export type NewSeries = Omit<Series, 'id'>;
+export type NewSeries = Omit<Series, 'id' | 'addedAt'> & { addedAt?: string | null };
 export type NewVolume = Omit<Volume, 'id'>;

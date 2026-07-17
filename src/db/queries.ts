@@ -9,13 +9,14 @@ import {
   volumeInsertParams,
 } from '~/src/db/serialize';
 
-const SERIES_COLS = 'title, author, type, total_volumes, external_ids, cover_url, genres, status';
+const SERIES_COLS =
+  'title, author, type, total_volumes, external_ids, cover_url, genres, status, added_at';
 const VOLUME_COLS =
   'series_id, number, isbn, title, page_count, cover_url, status, current_page, started_at, finished_at';
 
 export async function insertSeries(db: Db, input: NewSeries): Promise<number> {
   const res = await db.run(
-    `INSERT INTO series (${SERIES_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO series (${SERIES_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     seriesInsertParams(input),
   );
   return res.lastInsertRowId;

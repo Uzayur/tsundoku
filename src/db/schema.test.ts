@@ -49,4 +49,20 @@ describe('migrate', () => {
     const vols = await db.all('SELECT * FROM volumes');
     expect(vols).toHaveLength(0);
   });
+
+  it('adds series.added_at, defaulting existing rows to NULL', async () => {
+    const db = createTestDb();
+    // Migrate to v3 only, insert a row, then migrate the rest — simulates an
+    // existing install upgrading.
+    for (let v = 0; v < 3; v++) {
+      await db.exec(MIGRATIONS[v]);
+      await db.exec(`PRAGMA user_version = ${v + 1}`);
+    }
+    await db.run('INSERT INTO series (title, type) VALUES (?, ?)', ['Old', 'manga']);
+
+    await migrate(db);
+
+    const rows = await db.all<{ added_at: string | null }>('SELECT added_at FROM series');
+    expect(rows).toEqual([{ added_at: null }]);
+  });
 });
