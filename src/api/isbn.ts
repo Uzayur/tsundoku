@@ -93,8 +93,21 @@ export async function lookupIsbn(
   } catch {
     fromOpenLibrary = null;
   }
-  if (fromOpenLibrary) {
+  if (fromOpenLibrary?.pageCount != null) {
     return fromOpenLibrary;
   }
-  return lookupGoogleBooks(isbn, fetchFn);
+
+  // Open Library often knows the edition but not its length. Borrow just the
+  // page count from Google Books rather than return a volume worth 0 pages.
+  let fromGoogle: BookMetadata | null = null;
+  try {
+    fromGoogle = await lookupGoogleBooks(isbn, fetchFn);
+  } catch {
+    fromGoogle = null;
+  }
+
+  if (fromOpenLibrary) {
+    return { ...fromOpenLibrary, pageCount: fromGoogle?.pageCount ?? null };
+  }
+  return fromGoogle;
 }

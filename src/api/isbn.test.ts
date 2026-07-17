@@ -208,3 +208,50 @@ describe('lookupIsbn', () => {
     expect(result?.title).toBe('Chainsaw Man, Vol. 1');
   });
 });
+
+describe('lookupIsbn page count fallback', () => {
+  it('fills a missing page count from Google Books, keeping Open Library metadata', async () => {
+    const fakeFetch: FetchLike = async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        url.startsWith('https://openlibrary.org')
+          ? { [`ISBN:${ISBN}`]: { title: 'One Piece 4', number_of_pages: null } }
+          : { items: [{ volumeInfo: { title: 'One Piece Vol. 4', pageCount: 190 } }] },
+    });
+
+    const result = await lookupIsbn(ISBN, fakeFetch);
+
+    expect(result?.title).toBe('One Piece 4');
+    expect(result?.pageCount).toBe(190);
+  });
+
+  it('keeps the Open Library page count without calling Google Books', async () => {
+    const urls: string[] = [];
+    const fakeFetch: FetchLike = async (url) => {
+      urls.push(url);
+      return { ok: true, status: 200, json: async () => OPEN_LIBRARY_FIXTURE };
+    };
+
+    const result = await lookupIsbn(ISBN, fakeFetch);
+
+    expect(result?.pageCount).toBe(192);
+    expect(urls.some((u) => u.includes('googleapis'))).toBe(false);
+  });
+
+  it('returns the Open Library result when Google Books is rate limited', async () => {
+    const fakeFetch: FetchLike = async (url) =>
+      url.startsWith('https://openlibrary.org')
+        ? {
+            ok: true,
+            status: 200,
+            json: async () => ({ [`ISBN:${ISBN}`]: { title: 'Tome inconnu', number_of_pages: null } }),
+          }
+        : { ok: false, status: 429, json: async () => ({}) };
+
+    const result = await lookupIsbn(ISBN, fakeFetch);
+
+    expect(result?.title).toBe('Tome inconnu');
+    expect(result?.pageCount).toBeNull();
+  });
+});
