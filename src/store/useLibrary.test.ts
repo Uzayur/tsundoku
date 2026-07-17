@@ -63,3 +63,71 @@ describe('importBackup', () => {
     expect(restored.find((s) => s.title === 'Berserk')?.addedAt).toBeNull();
   });
 });
+
+describe('setVolumeCurrentPage', () => {
+  /** A scanned roman: one tome, page count known from the ISBN lookup. */
+  async function seedRoman(pageCount: number | null): Promise<number> {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(
+        makeSeries({ id: 0, title: 'La Horde du Contrevent', type: 'novel', totalVolumes: 1 }),
+      );
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
+    const volume = useLibrary.getState().volumesBySeriesId[seriesId][0];
+    await testDb.run('UPDATE volumes SET page_count = ? WHERE id = ?', [pageCount, volume.id]);
+    await useLibrary.getState().load();
+    return seriesId;
+  }
+
+  function vol1(seriesId: number) {
+    return useLibrary.getState().volumesBySeriesId[seriesId][0];
+  }
+
+  it('marks the tome read when the current page reaches the total', async () => {
+    const seriesId = await seedRoman(392);
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, 392);
+
+    expect(vol1(seriesId).status).toBe('read');
+    expect(vol1(seriesId).finishedAt).not.toBeNull();
+  });
+
+  it('marks the tome read when the current page overshoots the total', async () => {
+    const seriesId = await seedRoman(392);
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, 400);
+
+    expect(vol1(seriesId).status).toBe('read');
+  });
+
+  it('leaves a partial read in progress with no finish date', async () => {
+    const seriesId = await seedRoman(392);
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, 80);
+
+    expect(vol1(seriesId).status).toBe('reading');
+    expect(vol1(seriesId).finishedAt).toBeNull();
+  });
+
+  it('reopens a finished tome when the page is corrected back below the total', async () => {
+    const seriesId = await seedRoman(392);
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, 392);
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, 80);
+
+    expect(vol1(seriesId).status).toBe('reading');
+    expect(vol1(seriesId).finishedAt).toBeNull();
+  });
+
+  it('never auto-finishes when the page count is unknown', async () => {
+    const seriesId = await seedRoman(null);
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, 999);
+
+    expect(vol1(seriesId).status).toBe('reading');
+  });
+
+  it('persists the finish to the database, not just the in-memory state', async () => {
+    const seriesId = await seedRoman(392);
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, 392);
+    await useLibrary.getState().load();
+
+    expect(vol1(seriesId).status).toBe('read');
+    expect(vol1(seriesId).finishedAt).not.toBeNull();
+  });
+});

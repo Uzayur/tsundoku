@@ -117,10 +117,18 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     let volumes = [...(get().volumesBySeriesId[seriesId] ?? [])];
     const existing = volumes.find((v) => v.number === number);
     if (existing) {
-      await setVolumeStatus(db, existing.id, 'reading');
+      // Reaching the last page finishes the tome: for single-tome works the
+      // page card is the only control, so nothing else would ever mark it read
+      // and it could never count towards the stats. Correcting the page back
+      // down reopens it.
+      const done = existing.pageCount != null && page >= existing.pageCount;
+      const status: VolumeStatus = done ? 'read' : 'reading';
+      const finishedAt = done ? now() : null;
+      await setVolumeStatus(db, existing.id, status);
+      await setVolumeFinishedAt(db, existing.id, finishedAt);
       await setVolumeCurrentPage(db, existing.id, page);
       volumes = volumes.map((v) =>
-        v.id === existing.id ? { ...v, status: 'reading', currentPage: page } : v,
+        v.id === existing.id ? { ...v, status, finishedAt, currentPage: page } : v,
       );
     } else {
       const draft: Volume = { ...newVolume(seriesId, number, 'reading'), currentPage: page };
