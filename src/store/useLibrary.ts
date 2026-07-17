@@ -20,6 +20,7 @@ import {
   setVolumeStatus,
   updateSeries,
 } from '~/src/db/queries';
+import { normalizeTitle, parseVolumeTitle } from '~/src/lib/volumeTitle';
 import { SlotState } from '~/src/lib/volumeStatus';
 
 const now = () => new Date().toISOString();
@@ -229,31 +230,68 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
 
   addBook: async (meta) => {
     const db = await openDatabase();
-    const seriesId = await insertSeries(db, {
-      title: meta.title ?? meta.isbn,
-      author: meta.authors[0] ?? null,
-      // ISBN scans have no reliable manga/novel signal; default to novel and let
-      // the user correct it on the series page. (Manga are usually added via search.)
-      type: 'novel',
-      totalVolumes: 1,
-      externalIds: {},
-      coverUrl: meta.coverUrl,
-      genres: [],
-      status: 'reading',
-      addedAt: now(),
-    });
-    await insertVolume(db, {
-      seriesId,
-      number: 1,
-      isbn: meta.isbn,
-      title: meta.title,
-      pageCount: meta.pageCount,
-      coverUrl: meta.coverUrl,
-      status: 'owned',
-      currentPage: null,
-      startedAt: null,
-      finishedAt: null,
-    });
+    const { baseTitle, number } = parseVolumeTitle(meta.title ?? meta.isbn);
+    const volumeNumber = number ?? 1;
+    const key = normalizeTitle(baseTitle);
+
+    // 1. A series already in the library wins: the scan fills one of its tomes
+    //    rather than standing up a duplicate alongside it.
+    let seriesId = get().series.find((s) => normalizeTitle(s.title) === key)?.id ?? null;
+
+    // 2. Otherwise let AniList identify the work, so a scanned manga lands as a
+    //    manga with its real tome count instead of a one-tome "novel".
+    if (seriesId == null && number != null) {
+      let candidate: SeriesSearchResult | undefined;
+      try {
+        candidate = (await fetchSeries(baseTitle)).find(
+          (r) => normalizeTitle(r.series.title) === key,
+        );
+      } catch {
+        candidate = undefined;
+      }
+      if (candidate) {
+        seriesId = await insertSeries(db, { ...candidate.series, addedAt: now() });
+      }
+    }
+
+    // 3. Nothing identified it: keep the single-tome fallback.
+    if (seriesId == null) {
+      seriesId = await insertSeries(db, {
+        title: baseTitle,
+        author: meta.authors[0] ?? null,
+        // ISBN scans have no reliable manga/novel signal; default to novel and let
+        // the user correct it on the series page.
+        type: 'novel',
+        totalVolumes: 1,
+        externalIds: {},
+        coverUrl: meta.coverUrl,
+        genres: [],
+        status: 'reading',
+        addedAt: now(),
+      });
+    }
+
+    const existing = (get().volumesBySeriesId[seriesId] ?? []).find(
+      (v) => v.number === volumeNumber,
+    );
+    if (existing) {
+      // The tome is already tracked: the scan only contributes its real length.
+      await setVolumePageCount(db, existing.id, meta.pageCount);
+    } else {
+      await insertVolume(db, {
+        seriesId,
+        number: volumeNumber,
+        isbn: meta.isbn,
+        title: meta.title,
+        pageCount: meta.pageCount,
+        coverUrl: meta.coverUrl,
+        status: 'owned',
+        currentPage: null,
+        startedAt: null,
+        finishedAt: null,
+      });
+    }
+
     await get().load();
     return seriesId;
   },
