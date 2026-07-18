@@ -36,5 +36,15 @@ export const STATUS_LABEL: Record<SlotState, string> = {
   read: 'Lu',
 };
 
+// Single solid color per reading status for the book-detail hero dot + label,
+// pulled straight from STATUS_STYLE so it matches the color a tome of that status
+// gets in the series-page grid (corail reading/owned, navy read, grey wishlist).
+export const STATUS_HERO_COLOR: Record<VolumeStatus, string> = {
+  reading: STATUS_STYLE.reading.border,
+  read: STATUS_STYLE.read.fill,
+  owned: STATUS_STYLE.owned.fill,
+  wishlist: STATUS_STYLE.wishlist.border,
+};
+
 // The states shown in the series-detail legend.
 export const LEGEND_STATES: SlotState[] = ['read', 'reading', 'owned', 'wishlist', 'missing'];

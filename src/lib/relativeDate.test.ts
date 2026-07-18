@@ -1,4 +1,4 @@
-import { relativeDate } from '~/src/lib/relativeDate';
+import { relativeDate, shortDate } from '~/src/lib/relativeDate';
 
 // Local noon, so the test is not sensitive to the machine's timezone.
 const NOW = new Date(2026, 6, 17, 12, 0, 0); // 17 July 2026
@@ -52,5 +52,15 @@ describe('relativeDate', () => {
     // 23h58 apart, but two different calendar days → hier, not aujourd'hui.
     const late = new Date(2026, 6, 16, 23, 59, 0).toISOString();
     expect(relativeDate(late, new Date(2026, 6, 17, 0, 1, 0))).toBe('hier');
+  });
+});
+
+describe('shortDate', () => {
+  it('formats a full timestamp as DD/MM/YYYY, zero-padded', () => {
+    expect(shortDate(new Date(2026, 2, 5, 9, 0, 0).toISOString())).toBe('05/03/2026');
+  });
+
+  it('reads a date-only string as local, not shifted a day west of Greenwich', () => {
+    expect(shortDate('2026-01-01')).toBe('01/01/2026');
   });
 });

@@ -11,6 +11,14 @@ function startOfLocalDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
+/** `DD/MM/YYYY` for a stored ISO date, in local time. */
+export function shortDate(iso: string): string {
+  const d = parseStored(iso);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
 const DAY_MS = 86_400_000;
 
 /**
