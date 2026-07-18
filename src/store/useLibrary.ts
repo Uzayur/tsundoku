@@ -143,11 +143,32 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         continue;
       }
       const status = target as VolumeStatus;
-      const finishedAt = status === 'read' ? now() : null;
       if (existing) {
-        await setVolumeStatus(db, existing.id, status);
+        // Editing the status also moves the reading progression to match it:
+        //   Lu               → fill to the last page
+        //   En cours         → keep the page, unless it already reached the last
+        //                      one, which means the book is actually finished (Lu)
+        //   Possédé/Wishlist → not started yet, so reset the progression to zero
+        const { pageCount } = existing;
+        let nextStatus: VolumeStatus = status;
+        let currentPage = existing.currentPage;
+        if (status === 'read') {
+          currentPage = pageCount;
+        } else if (status === 'reading') {
+          if (pageCount != null && currentPage != null && currentPage >= pageCount) {
+            nextStatus = 'read';
+            currentPage = pageCount;
+          }
+        } else {
+          currentPage = 0;
+        }
+        const finishedAt = nextStatus === 'read' ? now() : null;
+        await setVolumeStatus(db, existing.id, nextStatus);
         await setVolumeFinishedAt(db, existing.id, finishedAt);
-        volumes = volumes.map((v) => (v.id === existing.id ? { ...v, status, finishedAt } : v));
+        await setVolumeCurrentPage(db, existing.id, currentPage);
+        volumes = volumes.map((v) =>
+          v.id === existing.id ? { ...v, status: nextStatus, finishedAt, currentPage } : v,
+        );
       } else {
         // A tome born from the grid never saw an ISBN, so its length has to be
         // resolved from the series title — and asked for when nothing knows it,

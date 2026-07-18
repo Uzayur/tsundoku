@@ -151,6 +151,82 @@ describe('setVolumeCurrentPage', () => {
   });
 });
 
+describe('setVolumeState progression sync', () => {
+  // A roman part-way through: known length, a page already reached.
+  async function seedReading(pageCount: number, currentPage: number): Promise<number> {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(
+        makeSeries({ id: 0, title: 'La Horde du Contrevent', type: 'novel', totalVolumes: 1 }),
+      );
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
+    const volume = useLibrary.getState().volumesBySeriesId[seriesId][0];
+    await testDb.run('UPDATE volumes SET page_count = ? WHERE id = ?', [pageCount, volume.id]);
+    await useLibrary.getState().load();
+    await useLibrary.getState().setVolumeCurrentPage(seriesId, 1, currentPage);
+    return seriesId;
+  }
+
+  function vol1(seriesId: number) {
+    return useLibrary.getState().volumesBySeriesId[seriesId][0];
+  }
+
+  it('fills the progression to the last page when marked read', async () => {
+    const seriesId = await seedReading(392, 80);
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    expect(vol1(seriesId).status).toBe('read');
+    expect(vol1(seriesId).currentPage).toBe(392);
+  });
+
+  it('resets the progression to zero when marked possédé', async () => {
+    const seriesId = await seedReading(392, 80);
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
+
+    expect(vol1(seriesId).status).toBe('owned');
+    expect(vol1(seriesId).currentPage).toBe(0);
+  });
+
+  it('resets the progression to zero when marked wishlist', async () => {
+    const seriesId = await seedReading(392, 80);
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'wishlist');
+
+    expect(vol1(seriesId).status).toBe('wishlist');
+    expect(vol1(seriesId).currentPage).toBe(0);
+  });
+
+  it('keeps the page and stays in progress when marked en cours below the total', async () => {
+    const seriesId = await seedReading(392, 80);
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'reading');
+
+    expect(vol1(seriesId).status).toBe('reading');
+    expect(vol1(seriesId).currentPage).toBe(80);
+  });
+
+  it('folds en cours to read when the last page was already reached', async () => {
+    const seriesId = await seedReading(392, 392);
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'reading');
+
+    expect(vol1(seriesId).status).toBe('read');
+    expect(vol1(seriesId).currentPage).toBe(392);
+    expect(vol1(seriesId).finishedAt).not.toBeNull();
+  });
+
+  it('persists the reset progression to the database, not just memory', async () => {
+    const seriesId = await seedReading(392, 80);
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
+    await useLibrary.getState().load();
+
+    expect(vol1(seriesId).currentPage).toBe(0);
+  });
+});
+
 describe('setVolumeState page count resolution', () => {
   async function seedSeries(overrides: Partial<Series> = {}): Promise<number> {
     return useLibrary.getState().addSeries(makeSeries({ id: 0, title: 'One Piece', ...overrides }));
