@@ -16,10 +16,13 @@ jest.mock('~/src/db/expoClient', () => ({
 // Creating a tome resolves its length over the network, and a scan asks AniList
 // to identify the work; keep the suite offline.
 jest.mock('~/src/api/openlibrary', () => ({ lookupPagesByTitle: jest.fn() }));
+jest.mock('~/src/api/googlebooks', () => ({ lookupMangaPages: jest.fn() }));
 jest.mock('~/src/api/anilist', () => ({ fetchSeries: jest.fn() }));
 
 // eslint-disable-next-line import/first -- must come after the jest.mock above
 import { fetchSeries } from '~/src/api/anilist';
+// eslint-disable-next-line import/first -- must come after the jest.mock above
+import { lookupMangaPages } from '~/src/api/googlebooks';
 // eslint-disable-next-line import/first -- must come after the jest.mock above
 import { BookMetadata } from '~/src/api/isbn';
 // eslint-disable-next-line import/first -- must come after the jest.mock above
@@ -40,6 +43,7 @@ function makeSeries(overrides: Partial<Series> & { id: number; title: string }):
     description: null,
     publisher: null,
     publishedYear: null,
+    pagesPerTome: null,
     ...overrides,
   };
 }
@@ -49,6 +53,8 @@ beforeEach(async () => {
   await migrate(testDb);
   jest.mocked(lookupPagesByTitle).mockReset();
   jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
+  jest.mocked(lookupMangaPages).mockReset();
+  jest.mocked(lookupMangaPages).mockResolvedValue(null);
   jest.mocked(fetchSeries).mockReset();
   jest.mocked(fetchSeries).mockResolvedValue([]);
   useLibrary.setState({ series: [], volumesBySeriesId: {}, pendingPages: null });
@@ -232,9 +238,31 @@ describe('setVolumeState page count resolution', () => {
     return useLibrary.getState().addSeries(makeSeries({ id: 0, title: 'One Piece', ...overrides }));
   }
 
-  it('resolves a page count from the series title when a tome is created', async () => {
-    jest.mocked(lookupPagesByTitle).mockResolvedValue(208);
+  it('keeps the standard manga length when Google Books finds nothing', async () => {
+    jest.mocked(lookupMangaPages).mockResolvedValue(null);
+    const seriesId = await seedSeries(); // makeSeries defaults to type 'manga'
+
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    expect(useLibrary.getState().volumesBySeriesId[seriesId][0].pageCount).toBe(192);
+    expect(lookupPagesByTitle).not.toHaveBeenCalled(); // manga never hits OpenLibrary
+    expect(useLibrary.getState().pendingPages).toBeNull(); // and never prompts
+  });
+
+  it('refines a manga tome to the real Google Books length when found', async () => {
+    jest.mocked(lookupMangaPages).mockResolvedValue(208);
     const seriesId = await seedSeries();
+
+    await useLibrary.getState().setVolumeState(seriesId, 2, 'read');
+
+    const tome = useLibrary.getState().volumesBySeriesId[seriesId][0];
+    expect(tome.pageCount).toBe(208);
+    expect(lookupMangaPages).toHaveBeenCalledWith('One Piece', 2);
+  });
+
+  it('resolves a non-manga page count from the series title when a tome is created', async () => {
+    jest.mocked(lookupPagesByTitle).mockResolvedValue(208);
+    const seriesId = await seedSeries({ type: 'bd' });
 
     await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
 
@@ -242,9 +270,9 @@ describe('setVolumeState page count resolution', () => {
     expect(lookupPagesByTitle).toHaveBeenCalledWith('One Piece', 1);
   });
 
-  it('flags the tome for manual entry when no source knows it', async () => {
+  it('flags a non-manga tome for manual entry when no source knows it', async () => {
     jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
-    const seriesId = await seedSeries({ title: 'Série obscure' });
+    const seriesId = await seedSeries({ type: 'bd', title: 'Série obscure' });
 
     await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
 
@@ -254,7 +282,7 @@ describe('setVolumeState page count resolution', () => {
 
   it('does not ask for pages when the tome is only marked owned', async () => {
     jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
-    const seriesId = await seedSeries();
+    const seriesId = await seedSeries({ type: 'bd' });
 
     await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
 
@@ -263,7 +291,7 @@ describe('setVolumeState page count resolution', () => {
 
   it('persists a manually entered page count', async () => {
     jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
-    const seriesId = await seedSeries();
+    const seriesId = await seedSeries({ type: 'bd' });
     await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
 
     await useLibrary.getState().resolvePendingPages(180);
@@ -277,7 +305,7 @@ describe('setVolumeState page count resolution', () => {
 
   it('clears the prompt without writing when the user skips', async () => {
     jest.mocked(lookupPagesByTitle).mockResolvedValue(null);
-    const seriesId = await seedSeries();
+    const seriesId = await seedSeries({ type: 'bd' });
     await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
 
     await useLibrary.getState().resolvePendingPages(null);
@@ -288,7 +316,7 @@ describe('setVolumeState page count resolution', () => {
 
   it('keeps the page count of an existing tome instead of looking it up again', async () => {
     jest.mocked(lookupPagesByTitle).mockResolvedValue(200);
-    const seriesId = await seedSeries();
+    const seriesId = await seedSeries({ type: 'bd' });
     await useLibrary.getState().setVolumeState(seriesId, 1, 'owned');
     jest.mocked(lookupPagesByTitle).mockClear();
 
@@ -500,6 +528,56 @@ describe('setVolumePages', () => {
 
     const vol = useLibrary.getState().volumesBySeriesId[seriesId][0];
     expect(vol).toMatchObject({ number: 1, pageCount: 300, status: 'read' });
+  });
+});
+
+describe('setSeriesTotal', () => {
+  it('updates the tome total and persists it across a reload', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'One Piece', totalVolumes: 30 }));
+
+    await useLibrary.getState().setSeriesTotal(seriesId, 31);
+
+    expect(useLibrary.getState().series.find((s) => s.id === seriesId)?.totalVolumes).toBe(31);
+    await useLibrary.getState().load();
+    expect(useLibrary.getState().series.find((s) => s.id === seriesId)?.totalVolumes).toBe(31);
+  });
+});
+
+describe('setSeriesPagesPerTome', () => {
+  it('stamps the length onto every tome and persists it as the series default', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'One Piece', totalVolumes: 30 }));
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read'); // manga → 192 by default
+    await useLibrary.getState().setVolumeState(seriesId, 2, 'owned');
+
+    await useLibrary.getState().setSeriesPagesPerTome(seriesId, 208);
+
+    const vols = useLibrary.getState().volumesBySeriesId[seriesId];
+    expect(vols.every((v) => v.pageCount === 208)).toBe(true);
+    expect(useLibrary.getState().series.find((s) => s.id === seriesId)?.pagesPerTome).toBe(208);
+
+    await useLibrary.getState().load();
+    expect(useLibrary.getState().series.find((s) => s.id === seriesId)?.pagesPerTome).toBe(208);
+    expect(
+      useLibrary.getState().volumesBySeriesId[seriesId].every((v) => v.pageCount === 208),
+    ).toBe(true);
+  });
+
+  it('uses the per-tome default for a tome added later, skipping any lookup', async () => {
+    jest.mocked(lookupMangaPages).mockResolvedValue(999);
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'One Piece', totalVolumes: 30 }));
+    await useLibrary.getState().setSeriesPagesPerTome(seriesId, 208);
+
+    await useLibrary.getState().setVolumeState(seriesId, 5, 'read');
+
+    const tome = useLibrary.getState().volumesBySeriesId[seriesId].find((v) => v.number === 5);
+    expect(tome?.pageCount).toBe(208);
+    expect(lookupMangaPages).not.toHaveBeenCalled();
   });
 });
 

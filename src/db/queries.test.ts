@@ -60,6 +60,7 @@ describe('series queries', () => {
       description: null,
       publisher: null,
       publishedYear: null,
+      pagesPerTome: null,
     });
   });
 

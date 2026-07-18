@@ -25,6 +25,7 @@ function makeSeries(overrides: Partial<Series> = {}): Series {
     description: null,
     publisher: null,
     publishedYear: null,
+    pagesPerTome: null,
     ...overrides,
   };
 }

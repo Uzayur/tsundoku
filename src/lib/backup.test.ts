@@ -17,6 +17,7 @@ function makeFixture(): BackupData {
       description: null,
       publisher: null,
       publishedYear: null,
+      pagesPerTome: null,
     },
     {
       id: 2,
@@ -32,6 +33,7 @@ function makeFixture(): BackupData {
       description: null,
       publisher: null,
       publishedYear: null,
+      pagesPerTome: null,
     },
   ];
 

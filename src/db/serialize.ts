@@ -14,6 +14,7 @@ export interface SeriesRow {
   description: string | null;
   publisher: string | null;
   published_year: number | null;
+  pages_per_tome: number | null;
 }
 
 export interface VolumeRow {
@@ -45,6 +46,7 @@ export function rowToSeries(r: SeriesRow): Series {
     description: r.description ?? null,
     publisher: r.publisher ?? null,
     publishedYear: r.published_year ?? null,
+    pagesPerTome: r.pages_per_tome ?? null,
   };
 }
 
@@ -64,7 +66,7 @@ export function rowToVolume(r: VolumeRow): Volume {
   };
 }
 
-/** Column order: title, author, type, total_volumes, external_ids, cover_url, genres, status, added_at, description, publisher, published_year */
+/** Column order: title, author, type, total_volumes, external_ids, cover_url, genres, status, added_at, description, publisher, published_year, pages_per_tome */
 export function seriesInsertParams(s: NewSeries): unknown[] {
   return [
     s.title,
@@ -79,6 +81,7 @@ export function seriesInsertParams(s: NewSeries): unknown[] {
     s.description ?? null,
     s.publisher ?? null,
     s.publishedYear ?? null,
+    s.pagesPerTome ?? null,
   ];
 }
 

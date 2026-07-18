@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { fetchSeries, SeriesSearchResult } from '~/src/api/anilist';
 import { BookMetadata } from '~/src/api/isbn';
+import { lookupMangaPages } from '~/src/api/googlebooks';
 import { lookupPagesByTitle } from '~/src/api/openlibrary';
 import { BackupData } from '~/src/lib/backup';
 import { getCached, setCached } from '~/src/db/cache';
@@ -75,6 +76,8 @@ interface LibraryState {
   addBook: (meta: BookMetadata, status?: VolumeStatus, currentPage?: number) => Promise<number>;
   updateSeriesType: (id: number, type: SeriesType) => Promise<void>;
   setSeriesGenres: (id: number, genres: string[]) => Promise<void>;
+  setSeriesTotal: (id: number, total: number) => Promise<void>;
+  setSeriesPagesPerTome: (id: number, pages: number) => Promise<void>;
   removeSeries: (id: number) => Promise<void>;
   importBackup: (data: BackupData) => Promise<void>;
 }
@@ -132,6 +135,8 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const db = await openDatabase();
     const numbers = applyToPrevious ? Array.from({ length: number }, (_, i) => i + 1) : [number];
     let volumes = [...(get().volumesBySeriesId[seriesId] ?? [])];
+    // New tomes whose length is looked up from the title after the grid updates.
+    const toResolve: { id: number; number: number; status: VolumeStatus; type: SeriesType }[] = [];
 
     for (const n of numbers) {
       const existing = volumes.find((v) => v.number === n);
@@ -170,22 +175,52 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
           v.id === existing.id ? { ...v, status: nextStatus, finishedAt, currentPage } : v,
         );
       } else {
-        // A tome born from the grid never saw an ISBN, so its length has to be
-        // resolved from the series title — and asked for when nothing knows it,
-        // otherwise it would silently count as 0 pages towards the stats.
-        const series = get().series.find((s) => s.id === seriesId);
-        const pages = series ? await lookupPagesByTitle(series.title, n) : null;
-        const draft = newVolume(seriesId, n, status, pages);
+        // A tome born from the grid never saw an ISBN, so its length is resolved
+        // from the title in the background — the grid recolours instantly instead
+        // of after a round-trip. A manga starts on the standard tome length so it
+        // still counts towards the stats even if the lookup finds nothing.
+        const seriesRow = get().series.find((s) => s.id === seriesId);
+        const seriesType = seriesRow?.type;
+        const perTome = seriesRow?.pagesPerTome ?? null;
+        const mangaDefault = seriesType === 'manga' ? MANGA_DEFAULT_PAGES : null;
+        const draft = newVolume(seriesId, n, status, perTome ?? mangaDefault);
         const id = await insertVolume(db, draft);
         volumes = [...volumes, { ...draft, id }];
-        if (pages == null && status === 'read') {
-          set({ pendingPages: { seriesId, number: n } });
-        }
+        // A fixed per-tome length wins; otherwise resolve the length from the title.
+        if (perTome == null && seriesType)
+          toResolve.push({ id, number: n, status, type: seriesType });
       }
     }
 
     volumes.sort((a, b) => a.number - b.number);
     set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: volumes } });
+
+    // Resolve tome lengths from the title after the grid has already updated, so
+    // the tap feels instant: manga go to Google Books (by tome), other types to
+    // OpenLibrary. A manga keeps its default when nothing is found; other types
+    // ask the user only when a tome was marked read.
+    if (toResolve.length > 0) {
+      const series = get().series.find((s) => s.id === seriesId);
+      for (const t of toResolve) {
+        if (!series) break;
+        const pages =
+          t.type === 'manga'
+            ? await lookupMangaPages(series.title, t.number)
+            : await lookupPagesByTitle(series.title, t.number);
+        if (pages != null) {
+          await setVolumePageCount(db, t.id, pages);
+          const current = get().volumesBySeriesId[seriesId] ?? [];
+          set({
+            volumesBySeriesId: {
+              ...get().volumesBySeriesId,
+              [seriesId]: current.map((v) => (v.id === t.id ? { ...v, pageCount: pages } : v)),
+            },
+          });
+        } else if (t.type !== 'manga' && t.status === 'read') {
+          set({ pendingPages: { seriesId, number: t.number } });
+        }
+      }
+    }
   },
 
   setVolumeCurrentPage: async (seriesId, number, page) => {
@@ -273,6 +308,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
       description: stamped.description ?? null,
       publisher: stamped.publisher ?? null,
       publishedYear: stamped.publishedYear ?? null,
+      pagesPerTome: stamped.pagesPerTome ?? null,
       addedAt,
       id,
     };
@@ -396,6 +432,25 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const db = await openDatabase();
     await updateSeries(db, id, { genres });
     set({ series: get().series.map((s) => (s.id === id ? { ...s, genres } : s)) });
+  },
+
+  setSeriesTotal: async (id, total) => {
+    const db = await openDatabase();
+    await updateSeries(db, id, { totalVolumes: total });
+    set({ series: get().series.map((s) => (s.id === id ? { ...s, totalVolumes: total } : s)) });
+  },
+
+  // A fixed per-tome length: stored on the series (the default for future tomes)
+  // and stamped onto every tome it already has, so the page stats stay uniform.
+  setSeriesPagesPerTome: async (id, pages) => {
+    const db = await openDatabase();
+    await updateSeries(db, id, { pagesPerTome: pages });
+    const volumes = (get().volumesBySeriesId[id] ?? []).map((v) => ({ ...v, pageCount: pages }));
+    for (const v of volumes) await setVolumePageCount(db, v.id, pages);
+    set({
+      series: get().series.map((s) => (s.id === id ? { ...s, pagesPerTome: pages } : s)),
+      volumesBySeriesId: { ...get().volumesBySeriesId, [id]: volumes },
+    });
   },
 
   removeSeries: async (id) => {

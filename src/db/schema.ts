@@ -50,12 +50,17 @@ ALTER TABLE series ADD COLUMN publisher TEXT;
 ALTER TABLE series ADD COLUMN published_year INTEGER;
 `;
 
+const MIGRATION_6 = `
+ALTER TABLE series ADD COLUMN pages_per_tome INTEGER;
+`;
+
 export const MIGRATIONS: string[] = [
   MIGRATION_1,
   MIGRATION_2,
   MIGRATION_3,
   MIGRATION_4,
   MIGRATION_5,
+  MIGRATION_6,
 ];
 
 export async function migrate(db: Db): Promise<void> {

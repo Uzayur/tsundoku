@@ -23,6 +23,7 @@ describe('serialize', () => {
       description: 'Guts wields a very large sword.',
       publisher: 'Hakusensha',
       published_year: 1990,
+      pages_per_tome: 224,
     });
     expect(series).toEqual({
       id: 7,
@@ -38,6 +39,7 @@ describe('serialize', () => {
       description: 'Guts wields a very large sword.',
       publisher: 'Hakusensha',
       publishedYear: 1990,
+      pagesPerTome: 224,
     });
   });
 
@@ -56,6 +58,7 @@ describe('serialize', () => {
       description: null,
       publisher: null,
       published_year: null,
+      pages_per_tome: null,
     };
     expect(rowToSeries(row).addedAt).toBe('2026-07-17T10:30:00.000Z');
   });
@@ -75,6 +78,7 @@ describe('serialize', () => {
       description: null,
       publisher: null,
       published_year: null,
+      pages_per_tome: null,
     };
     expect(rowToSeries(row).addedAt).toBeNull();
   });
@@ -132,6 +136,7 @@ describe('serialize', () => {
       null,
       null,
       null,
+      null,
     ]);
   });
 
@@ -146,8 +151,8 @@ describe('serialize', () => {
       genres: ['Fantasy'],
       status: 'reading',
     };
-    // Column order: ..., status(7), added_at(8), description(9), publisher(10), published_year(11)
-    expect(seriesInsertParams(base).slice(8)).toEqual([null, null, null, null]);
+    // Column order: ..., added_at(8), description(9), publisher(10), published_year(11), pages_per_tome(12)
+    expect(seriesInsertParams(base).slice(8)).toEqual([null, null, null, null, null]);
     expect(
       seriesInsertParams({
         ...base,
@@ -155,8 +160,9 @@ describe('serialize', () => {
         description: 'A quiet elf.',
         publisher: 'Shogakukan',
         publishedYear: 2020,
+        pagesPerTome: 200,
       }).slice(8),
-    ).toEqual(['2026-07-17T10:30:00.000Z', 'A quiet elf.', 'Shogakukan', 2020]);
+    ).toEqual(['2026-07-17T10:30:00.000Z', 'A quiet elf.', 'Shogakukan', 2020, 200]);
   });
 
   it('volumeInsertParams produces params in column order with nulls', () => {

@@ -16,6 +16,7 @@ function makeSeries(id: number, addedAt: string | null, title = `S${id}`): Serie
     description: null,
     publisher: null,
     publishedYear: null,
+    pagesPerTome: null,
   };
 }
 

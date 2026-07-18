@@ -18,6 +18,8 @@ export interface Series {
   description: string | null;
   publisher: string | null;
   publishedYear: number | null;
+  /** A fixed per-tome page length set by the user; applies to every tome. Null when unset. */
+  pagesPerTome: number | null;
 }
 
 export interface Volume {
@@ -36,7 +38,7 @@ export interface Volume {
 
 export type NewSeries = Omit<
   Series,
-  'id' | 'addedAt' | 'description' | 'publisher' | 'publishedYear'
+  'id' | 'addedAt' | 'description' | 'publisher' | 'publishedYear' | 'pagesPerTome'
 > &
-  Partial<Pick<Series, 'addedAt' | 'description' | 'publisher' | 'publishedYear'>>;
+  Partial<Pick<Series, 'addedAt' | 'description' | 'publisher' | 'publishedYear' | 'pagesPerTome'>>;
 export type NewVolume = Omit<Volume, 'id'>;
