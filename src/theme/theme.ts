@@ -1,6 +1,7 @@
 // Rankr design system tokens. Corail is an accent only — never a dominant surface.
 export const theme = {
   accent: '#f55139', // corail
+  accentSoft: '#fdece7', // corail wash — tinted chips/backgrounds only
   ink: '#0f222d', // navy — text / filled elements
   inkHover: '#223849',
   muted: '#879196',

@@ -1,4 +1,4 @@
-import { relativeDate, shortDate } from '~/src/lib/relativeDate';
+import { monthDay, relativeDate, shortDate } from '~/src/lib/relativeDate';
 
 // Local noon, so the test is not sensitive to the machine's timezone.
 const NOW = new Date(2026, 6, 17, 12, 0, 0); // 17 July 2026
@@ -62,5 +62,17 @@ describe('shortDate', () => {
 
   it('reads a date-only string as local, not shifted a day west of Greenwich', () => {
     expect(shortDate('2026-01-01')).toBe('01/01/2026');
+  });
+});
+
+describe('monthDay', () => {
+  it('formats a date as day + abbreviated French month', () => {
+    expect(monthDay('2026-07-14')).toBe('14 juil.');
+    expect(monthDay('2026-06-21')).toBe('21 juin');
+    expect(monthDay('2026-03-05')).toBe('5 mars');
+  });
+
+  it('reads a date-only string as local, not shifted a day west of Greenwich', () => {
+    expect(monthDay('2026-01-01')).toBe('1 janv.');
   });
 });

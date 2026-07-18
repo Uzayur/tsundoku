@@ -1,21 +1,20 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
-import { Pill } from '~/src/components/ui/Pill';
+import { Cover } from '~/src/components/ui/Cover';
+import { HeroStat } from '~/src/components/ui/HeroStat';
 import { Screen } from '~/src/components/ui/Screen';
 import { ScreenHeader } from '~/src/components/ui/ScreenHeader';
-import { SectionTitle } from '~/src/components/ui/SectionTitle';
 import { SegmentControl } from '~/src/components/ui/SegmentControl';
-import { StatCard } from '~/src/components/ui/StatCard';
 import { SeriesType, Volume } from '~/src/db/models';
-import { readCount } from '~/src/lib/progress';
+import { monthDay } from '~/src/lib/relativeDate';
 import {
   aggregate,
   booksInProgress,
   pagesPerBook,
   Period,
-  topSeries,
+  recentlyCompleted,
   totalBooksRead,
   totalPagesRead,
   typeDistribution,
@@ -24,20 +23,41 @@ import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
 
 const PERIOD_OPTIONS: { key: Period; label: string }[] = [
-  { key: 'month', label: 'Mois' },
-  { key: 'quarter', label: 'Trim.' },
-  { key: 'semester', label: 'Sem.' },
+  { key: '3m', label: '3 mois' },
+  { key: '6m', label: '6 mois' },
   { key: 'year', label: 'Année' },
+  { key: 'all', label: 'Tout' },
 ];
 
+// Legend labels are plural (they count many series); list tags name a single
+// work, so novels read "Roman" there.
 const TYPE_LABELS: Record<SeriesType, string> = {
   manga: 'Manga',
   novel: 'Romans',
   bd: 'BD',
   comic: 'Comics',
 };
+const TYPE_TAGS: Record<SeriesType, string> = {
+  manga: 'Manga',
+  novel: 'Roman',
+  bd: 'BD',
+  comic: 'Comic',
+};
 
-const MEDALS = ['🥇', '🥈', '🥉'];
+const MONTHS_ABBR = [
+  'Jan',
+  'Fév',
+  'Mar',
+  'Avr',
+  'Mai',
+  'Juin',
+  'Juil',
+  'Aoû',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Déc',
+];
 
 function typeColor(type: SeriesType): string {
   if (type === 'manga') return theme.accent;
@@ -45,10 +65,60 @@ function typeColor(type: SeriesType): string {
   return theme.muted;
 }
 
+/** '2026-06' → 'Juin', '2026' → '2026'. */
+function bucketLabel(key: string): string {
+  if (key.length === 4) return key;
+  return MONTHS_ABBR[Number(key.slice(5, 7)) - 1];
+}
+
+/**
+ * Group thousands with a space (`8730` → `8 730`), the French convention.
+ * Done by hand because Hermes' toLocaleString ignores the locale.
+ */
+function groupThousands(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+function BookIcon({ color }: { color: string }) {
+  return (
+    <Svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <Path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <Path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </Svg>
+  );
+}
+
+function PagesIcon({ color }: { color: string }) {
+  return (
+    <Svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <Path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <Path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </Svg>
+  );
+}
+
 export default function StatsScreen() {
   const series = useLibrary((s) => s.series);
   const volumesBySeriesId = useLibrary((s) => s.volumesBySeriesId);
-  const [period, setPeriod] = useState<Period>('month');
+  const [period, setPeriod] = useState<Period>('6m');
 
   const allVolumes: Volume[] = useMemo(
     () => Object.values(volumesBySeriesId).flat(),
@@ -57,6 +127,7 @@ export default function StatsScreen() {
 
   const buckets = useMemo(() => aggregate(allVolumes, period), [allVolumes, period]);
   const maxBooks = Math.max(1, ...buckets.map((b) => b.books));
+  const windowBooks = buckets.reduce((sum, b) => sum + b.books, 0);
 
   const distribution = useMemo(() => typeDistribution(series), [series]);
   const totalSeries = distribution.reduce((sum, d) => sum + d.count, 0);
@@ -64,107 +135,151 @@ export default function StatsScreen() {
     let offset = 25;
     return distribution.map((d) => {
       const pct = totalSeries > 0 ? Math.round((d.count / totalSeries) * 100) : 0;
-      const seg = { type: d.type, pct, dashoffset: offset, dasharray: `${pct} ${100 - pct}` };
+      // Full-length arcs that meet edge to edge, for one continuous ring rather
+      // than slices split by grey gaps.
+      const seg = {
+        type: d.type,
+        pct,
+        count: d.count,
+        dashoffset: offset,
+        dasharray: `${pct} ${100 - pct}`,
+      };
       offset -= pct;
       return seg;
     });
   }, [distribution, totalSeries]);
 
-  const tops = useMemo(() => {
-    const input = series.map((s) => ({
-      title: s.title,
-      read: readCount(volumesBySeriesId[s.id] ?? []),
-    }));
-    return topSeries(input);
-  }, [series, volumesBySeriesId]);
+  const completed = useMemo(
+    () => recentlyCompleted(series, volumesBySeriesId),
+    [series, volumesBySeriesId],
+  );
 
   return (
     <Screen>
-      <ScreenHeader title="Statistiques" />
+      <ScreenHeader title="Statistiques" subtitle="Votre activité de lecture" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <SegmentControl options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+        {/* Depuis le début — all-time totals */}
+        <Text style={styles.sectionTitle}>Depuis le début</Text>
+        <View style={styles.heroRow}>
+          <HeroStat
+            variant="primary"
+            value={totalBooksRead(allVolumes)}
+            label="Livres lus"
+            icon={<BookIcon color="#ffffff" />}
+          />
+          <HeroStat
+            variant="secondary"
+            value={groupThousands(totalPagesRead(allVolumes))}
+            label="Pages lues"
+            icon={<PagesIcon color={theme.accent} />}
+          />
+        </View>
+        <View style={styles.miniCard}>
+          <MiniStat value={booksInProgress(allVolumes)} label="En cours" first />
+          <MiniStat value={pagesPerBook(allVolumes)} label="Pages / livre" />
+          <MiniStat value={series.length} label="Séries suivies" />
+        </View>
 
-        <View style={styles.cardsRow}>
-          <StatCard value={totalBooksRead(allVolumes)} label="Livres lus" />
-          <StatCard value={booksInProgress(allVolumes)} label="En cours" />
+        {/* Chart */}
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionTitle}>Livres lus par période</Text>
+          {windowBooks > 0 ? (
+            <Text style={styles.sectionCap}>
+              {windowBooks} livre{windowBooks > 1 ? 's' : ''}
+            </Text>
+          ) : null}
         </View>
-        <View style={styles.cardsRow}>
-          <StatCard value={totalPagesRead(allVolumes)} label="Pages lues" />
-          <StatCard value={pagesPerBook(allVolumes)} label="Pages / livre" />
+        <View style={styles.segmentWrap}>
+          <SegmentControl options={PERIOD_OPTIONS} value={period} onChange={setPeriod} size="sm" />
         </View>
-        <View style={styles.cardsRow}>
-          <StatCard value={series.length} label="Séries suivies" />
-          {/* Keeps the odd card at grid width instead of stretching it full-bleed. */}
-          <View style={styles.cardSpacer} />
-        </View>
-
-        <SectionTitle>Livres lus par période</SectionTitle>
         <View style={styles.card}>
-          {buckets.length === 0 ? (
+          {windowBooks === 0 ? (
             <Text style={styles.empty}>Aucune donnée</Text>
           ) : (
-            <View style={styles.chart}>
-              {buckets.map((bucket, index) => {
-                const last = index === buckets.length - 1;
-                const heightPct = (bucket.books / maxBooks) * 100;
-                return (
-                  <View key={bucket.key} style={styles.barCol}>
-                    <Text style={styles.barValue}>{bucket.books}</Text>
-                    <View style={styles.barTrack}>
+            <>
+              <View style={styles.chart}>
+                {buckets.map((bucket, index) => {
+                  const last = index === buckets.length - 1;
+                  const heightPct = (bucket.books / maxBooks) * 100;
+                  return (
+                    <View key={bucket.key} style={styles.barCol}>
+                      <Text style={[styles.barValue, last && styles.barValueActive]}>
+                        {bucket.books}
+                      </Text>
                       <View
                         style={[
                           styles.bar,
-                          { height: `${heightPct}%` },
-                          last ? styles.barLast : styles.barDefault,
+                          { height: `${Math.max(heightPct, 2)}%` },
+                          last ? styles.barActive : styles.barDefault,
                         ]}
                       />
                     </View>
-                    <Text style={styles.barLabel} numberOfLines={1}>
-                      {bucket.key}
+                  );
+                })}
+              </View>
+              <View style={styles.labels}>
+                {buckets.map((bucket, index) => {
+                  const last = index === buckets.length - 1;
+                  return (
+                    <Text
+                      key={bucket.key}
+                      style={[styles.barLabel, last && styles.barLabelActive]}
+                      numberOfLines={1}
+                    >
+                      {bucketLabel(bucket.key)}
                     </Text>
-                  </View>
-                );
-              })}
-            </View>
+                  );
+                })}
+              </View>
+            </>
           )}
         </View>
 
-        <SectionTitle>Répartition par type</SectionTitle>
+        {/* Donut */}
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionTitle}>Répartition par type</Text>
+        </View>
         <View style={styles.card}>
           {totalSeries === 0 ? (
             <Text style={styles.empty}>Aucune donnée</Text>
           ) : (
             <View style={styles.donutRow}>
-              <Svg width={120} height={120} viewBox="0 0 42 42">
-                <Circle
-                  cx={21}
-                  cy={21}
-                  r={15.9155}
-                  fill="none"
-                  stroke={theme.greyLt}
-                  strokeWidth={6}
-                />
-                {segments.map((seg) => (
+              <View style={styles.donut}>
+                <Svg width={120} height={120} viewBox="0 0 42 42">
                   <Circle
-                    key={seg.type}
                     cx={21}
                     cy={21}
                     r={15.9155}
                     fill="none"
-                    stroke={typeColor(seg.type)}
-                    strokeWidth={6}
-                    strokeDasharray={seg.dasharray}
-                    strokeDashoffset={seg.dashoffset}
+                    stroke={theme.greyLt}
+                    strokeWidth={4}
                   />
-                ))}
-              </Svg>
+                  {segments.map((seg) => (
+                    <Circle
+                      key={seg.type}
+                      cx={21}
+                      cy={21}
+                      r={15.9155}
+                      fill="none"
+                      stroke={typeColor(seg.type)}
+                      strokeWidth={4}
+                      strokeDasharray={seg.dasharray}
+                      strokeDashoffset={seg.dashoffset}
+                    />
+                  ))}
+                </Svg>
+                <View style={styles.donutCenter}>
+                  <Text style={styles.donutTotal}>{totalSeries}</Text>
+                  <Text style={styles.donutCap}>séries</Text>
+                </View>
+              </View>
               <View style={styles.legend}>
                 {segments.map((seg) => (
                   <View key={seg.type} style={styles.legendRow}>
                     <View style={[styles.legendSquare, { backgroundColor: typeColor(seg.type) }]} />
-                    <Text style={styles.legendText}>
-                      {`${TYPE_LABELS[seg.type]} — ${seg.pct}%`}
-                    </Text>
+                    <Text style={styles.legendName}>{TYPE_LABELS[seg.type]}</Text>
+                    <Text style={styles.legendVal}>{seg.count}</Text>
+                    <Text style={styles.legendPct}>{seg.pct}%</Text>
                   </View>
                 ))}
               </View>
@@ -172,13 +287,33 @@ export default function StatsScreen() {
           )}
         </View>
 
-        {tops.length > 0 ? (
+        {/* Terminées récemment */}
+        {completed.length > 0 ? (
           <>
-            <SectionTitle>Top séries</SectionTitle>
-            <View style={styles.topRow}>
-              {tops.map((t, index) => (
-                <Pill key={t.title} label={`${MEDALS[index]} ${t.title} · ${t.read}`} />
-              ))}
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>Terminées récemment</Text>
+            </View>
+            <View style={styles.list}>
+              {completed.map((row, index) => {
+                const tally =
+                  row.type === 'novel'
+                    ? `${row.pages} pages`
+                    : `${row.tomes} tome${row.tomes > 1 ? 's' : ''}`;
+                return (
+                  <View key={row.id} style={[styles.listRow, index > 0 && styles.listRowDivider]}>
+                    <Cover title={row.title} seed={row.id} coverUrl={row.coverUrl} size="sm" />
+                    <View style={styles.listBody}>
+                      <Text style={styles.listTitle} numberOfLines={1}>
+                        {row.title}
+                      </Text>
+                      <Text style={styles.listSub} numberOfLines={1}>
+                        {tally} · terminé le {monthDay(row.completedAt)}
+                      </Text>
+                    </View>
+                    <Text style={styles.listTag}>{TYPE_TAGS[row.type]}</Text>
+                  </View>
+                );
+              })}
             </View>
           </>
         ) : null}
@@ -187,17 +322,65 @@ export default function StatsScreen() {
   );
 }
 
+function MiniStat({
+  value,
+  label,
+  first,
+}: {
+  value: string | number;
+  label: string;
+  first?: boolean;
+}) {
+  return (
+    <View style={[styles.mini, !first && styles.miniDivider]}>
+      <Text style={styles.miniValue}>{value}</Text>
+      <Text style={styles.miniLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: theme.screenPadX,
     paddingBottom: theme.tabBarClearance,
   },
-  cardSpacer: { flex: 1 },
-  cardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+  sectionTitle: {
+    fontFamily: theme.font.bold,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: theme.muted,
   },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.lg,
+    marginBottom: 12,
+  },
+  sectionCap: { fontFamily: theme.font.semibold, fontSize: 12, color: theme.sub },
+
+  heroRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  miniCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.line,
+    borderRadius: theme.radiusLg,
+    marginTop: 12,
+    paddingVertical: 14,
+  },
+  mini: { flex: 1, alignItems: 'center', paddingHorizontal: 6 },
+  miniDivider: { borderLeftWidth: 1, borderLeftColor: theme.line },
+  miniValue: {
+    fontFamily: theme.font.extrabold,
+    fontSize: 20,
+    letterSpacing: -0.4,
+    color: theme.ink,
+  },
+  miniLabel: { fontFamily: theme.font.medium, fontSize: 11.5, color: theme.sub, marginTop: 3 },
+
+  segmentWrap: { marginBottom: 12 },
   card: {
     backgroundColor: theme.surface,
     borderWidth: 1,
@@ -216,51 +399,104 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: theme.spacing.sm,
-    height: 160,
+    height: 150,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.line,
+    // Headroom so the value label above the tallest bar never crosses the card's
+    // top border; no bottom gap so the bars sit flush on the separator line.
+    paddingTop: 22,
+    paddingBottom: 0,
   },
   barCol: {
     flex: 1,
+    height: '100%',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 6,
   },
-  barValue: { fontFamily: theme.font.bold, fontSize: 11, color: theme.ink },
-  barTrack: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
+  barValue: { fontFamily: theme.font.bold, fontSize: 11, color: theme.muted },
+  barValueActive: { color: theme.accent },
   bar: {
-    width: '72%',
+    width: '66%',
     minHeight: 4,
-    borderRadius: 6,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    // Square base so the column seats cleanly on the separator line.
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
-  barDefault: { backgroundColor: theme.ink },
-  barLast: { backgroundColor: theme.accent },
-  barLabel: { fontFamily: theme.font.medium, fontSize: 10, color: theme.muted },
-  donutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.lg,
-  },
-  legend: {
+  barDefault: { backgroundColor: '#d9dde0' },
+  barActive: { backgroundColor: theme.accent },
+  labels: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: 8 },
+  barLabel: {
     flex: 1,
-    gap: theme.spacing.sm,
+    textAlign: 'center',
+    fontFamily: theme.font.semibold,
+    fontSize: 10.5,
+    color: theme.muted,
   },
-  legendRow: {
+  barLabelActive: { color: theme.ink },
+
+  donutRow: { flexDirection: 'row', alignItems: 'center', gap: 22 },
+  donut: { width: 120, height: 120 },
+  donutCenter: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutTotal: {
+    fontFamily: theme.font.extrabold,
+    fontSize: 24,
+    letterSpacing: -0.5,
+    color: theme.ink,
+  },
+  donutCap: {
+    fontFamily: theme.font.semibold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: theme.muted,
+    marginTop: 2,
+  },
+  legend: { flex: 1, gap: 11 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  legendSquare: { width: 11, height: 11, borderRadius: 3 },
+  legendName: { flex: 1, fontFamily: theme.font.semibold, fontSize: 13, color: theme.ink },
+  legendVal: { fontFamily: theme.font.bold, fontSize: 13, color: theme.ink },
+  legendPct: {
+    fontFamily: theme.font.medium,
+    fontSize: 12,
+    color: theme.muted,
+    width: 34,
+    textAlign: 'right',
+  },
+
+  list: {
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.line,
+    borderRadius: theme.radiusLg,
+    overflow: 'hidden',
+  },
+  listRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: 12,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
   },
-  legendSquare: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-  },
-  legendText: { fontFamily: theme.font.semibold, fontSize: 13, color: theme.ink },
-  topRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
+  listRowDivider: { borderTopWidth: 1, borderTopColor: theme.line },
+  listBody: { flex: 1, minWidth: 0 },
+  listTitle: { fontFamily: theme.font.semibold, fontSize: 14, color: theme.ink },
+  listSub: { fontFamily: theme.font.medium, fontSize: 12, color: theme.muted, marginTop: 2 },
+  listTag: {
+    fontFamily: theme.font.semibold,
+    fontSize: 11,
+    color: theme.sub,
+    backgroundColor: theme.greyLt,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 99,
+    overflow: 'hidden',
   },
 });

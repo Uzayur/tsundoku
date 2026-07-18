@@ -3,8 +3,7 @@ import {
   aggregate,
   booksInProgress,
   pagesPerBook,
-  periodKey,
-  topSeries,
+  recentlyCompleted,
   totalBooksRead,
   totalPagesRead,
   typeDistribution,
@@ -46,95 +45,75 @@ function makeVolume(overrides: Partial<Volume> = {}): Volume {
   };
 }
 
-describe('periodKey', () => {
-  it('derives the month key', () => {
-    expect(periodKey('2026-03-15', 'month')).toBe('2026-03');
-    expect(periodKey('2026-08-01', 'month')).toBe('2026-08');
-  });
-
-  it('derives the quarter key', () => {
-    expect(periodKey('2026-01-31', 'quarter')).toBe('2026-Q1');
-    expect(periodKey('2026-03-15', 'quarter')).toBe('2026-Q1');
-    expect(periodKey('2026-04-01', 'quarter')).toBe('2026-Q2');
-    expect(periodKey('2026-06-30', 'quarter')).toBe('2026-Q2');
-    expect(periodKey('2026-08-01', 'quarter')).toBe('2026-Q3');
-    expect(periodKey('2026-09-30', 'quarter')).toBe('2026-Q3');
-    expect(periodKey('2026-10-01', 'quarter')).toBe('2026-Q4');
-    expect(periodKey('2026-12-31', 'quarter')).toBe('2026-Q4');
-  });
-
-  it('derives the semester key', () => {
-    expect(periodKey('2026-01-15', 'semester')).toBe('2026-S1');
-    expect(periodKey('2026-06-30', 'semester')).toBe('2026-S1');
-    expect(periodKey('2026-07-01', 'semester')).toBe('2026-S2');
-    expect(periodKey('2026-08-01', 'semester')).toBe('2026-S2');
-    expect(periodKey('2026-12-31', 'semester')).toBe('2026-S2');
-  });
-
-  it('derives the year key', () => {
-    expect(periodKey('2026-03-15', 'year')).toBe('2026');
-    expect(periodKey('2025-12-31', 'year')).toBe('2025');
-  });
-
-  it('works with full ISO timestamps using only the date prefix', () => {
-    expect(periodKey('2026-03-15T22:13:00.000Z', 'month')).toBe('2026-03');
-    expect(periodKey('2026-08-01T00:00:00Z', 'quarter')).toBe('2026-Q3');
-  });
-});
-
 describe('aggregate', () => {
-  it('buckets read+finished volumes by month, sorted ascending, summing books and pages', () => {
+  // A fixed "now" so the trailing-month windows are deterministic.
+  const now = new Date(2026, 5, 15); // June 2026 (month is 0-based)
+
+  it('returns the trailing 6 months, filling empty months with zeros', () => {
     const volumes: Volume[] = [
       makeVolume({ id: 1, finishedAt: '2026-03-10', pageCount: 200 }),
       makeVolume({ id: 2, finishedAt: '2026-03-22', pageCount: 180 }),
-      makeVolume({ id: 3, finishedAt: '2026-01-05', pageCount: 150 }),
+      makeVolume({ id: 3, finishedAt: '2026-06-05', pageCount: 150 }),
       // read but WITHOUT finishedAt → excluded
       makeVolume({ id: 4, finishedAt: null, pageCount: 999 }),
       // not read → excluded
-      makeVolume({ id: 5, status: 'reading', finishedAt: '2026-03-01', pageCount: 999 }),
+      makeVolume({ id: 5, status: 'reading', finishedAt: '2026-06-01', pageCount: 999 }),
       // null pageCount → treated as 0
-      makeVolume({ id: 6, finishedAt: '2026-01-20', pageCount: null }),
+      makeVolume({ id: 6, finishedAt: '2026-06-20', pageCount: null }),
     ];
 
-    expect(aggregate(volumes, 'month')).toEqual([
-      { key: '2026-01', books: 2, pages: 150 },
+    expect(aggregate(volumes, '6m', now)).toEqual([
+      { key: '2026-01', books: 0, pages: 0 },
+      { key: '2026-02', books: 0, pages: 0 },
       { key: '2026-03', books: 2, pages: 380 },
+      { key: '2026-04', books: 0, pages: 0 },
+      { key: '2026-05', books: 0, pages: 0 },
+      { key: '2026-06', books: 2, pages: 150 },
     ]);
   });
 
-  it('buckets by quarter', () => {
+  it('returns exactly the trailing 3 months for 3m, spanning a year boundary', () => {
+    const start = new Date(2026, 1, 10); // February 2026
     const volumes: Volume[] = [
-      makeVolume({ id: 1, finishedAt: '2026-02-10', pageCount: 100 }),
-      makeVolume({ id: 2, finishedAt: '2026-05-10', pageCount: 100 }),
-      makeVolume({ id: 3, finishedAt: '2026-08-10', pageCount: 100 }),
+      makeVolume({ id: 1, finishedAt: '2025-12-31', pageCount: 100 }),
+      makeVolume({ id: 2, finishedAt: '2026-02-01', pageCount: 50 }),
+      // outside the 3-month window (Dec, Jan, Feb) → excluded
+      makeVolume({ id: 3, finishedAt: '2025-11-30', pageCount: 999 }),
     ];
 
-    expect(aggregate(volumes, 'quarter')).toEqual([
-      { key: '2026-Q1', books: 1, pages: 100 },
-      { key: '2026-Q2', books: 1, pages: 100 },
-      { key: '2026-Q3', books: 1, pages: 100 },
+    expect(aggregate(volumes, '3m', start)).toEqual([
+      { key: '2025-12', books: 1, pages: 100 },
+      { key: '2026-01', books: 0, pages: 0 },
+      { key: '2026-02', books: 1, pages: 50 },
     ]);
   });
 
-  it('buckets by year across multiple years', () => {
+  it('returns 12 trailing months for year', () => {
+    const buckets = aggregate([], 'year', now);
+    expect(buckets).toHaveLength(12);
+    expect(buckets[0].key).toBe('2025-07');
+    expect(buckets[11].key).toBe('2026-06');
+  });
+
+  it('buckets by year across multiple years for all, ascending', () => {
     const volumes: Volume[] = [
       makeVolume({ id: 1, finishedAt: '2025-11-10', pageCount: 300 }),
       makeVolume({ id: 2, finishedAt: '2026-01-10', pageCount: 100 }),
       makeVolume({ id: 3, finishedAt: '2026-09-10', pageCount: 50 }),
     ];
 
-    expect(aggregate(volumes, 'year')).toEqual([
+    expect(aggregate(volumes, 'all', now)).toEqual([
       { key: '2025', books: 1, pages: 300 },
       { key: '2026', books: 2, pages: 150 },
     ]);
   });
 
-  it('returns an empty array when nothing qualifies', () => {
+  it('returns an empty array for all when nothing qualifies', () => {
     const volumes: Volume[] = [
       makeVolume({ id: 1, status: 'owned', finishedAt: null }),
       makeVolume({ id: 2, status: 'read', finishedAt: null }),
     ];
-    expect(aggregate(volumes, 'month')).toEqual([]);
+    expect(aggregate(volumes, 'all', now)).toEqual([]);
   });
 });
 
@@ -203,41 +182,70 @@ describe('typeDistribution', () => {
   });
 });
 
-describe('topSeries', () => {
-  it('sorts by read desc and takes the default limit of 3', () => {
-    const input = [
-      { title: 'A', read: 2 },
-      { title: 'B', read: 8 },
-      { title: 'C', read: 5 },
-      { title: 'D', read: 4 },
+describe('recentlyCompleted', () => {
+  it('lists completed series by derived completion date desc, with type-appropriate tallies', () => {
+    const series: Series[] = [
+      makeSeries({ id: 1, title: 'Death Note', type: 'manga', status: 'completed' }),
+      makeSeries({ id: 2, title: 'Fondation', type: 'novel', status: 'completed' }),
+      // not completed → excluded
+      makeSeries({ id: 3, title: 'En cours', type: 'manga', status: 'reading' }),
     ];
-    expect(topSeries(input)).toEqual([
-      { title: 'B', read: 8 },
-      { title: 'C', read: 5 },
-      { title: 'D', read: 4 },
+    const volumesBySeriesId: Record<number, Volume[]> = {
+      1: [
+        makeVolume({ id: 10, seriesId: 1, finishedAt: '2026-07-01', pageCount: 190 }),
+        makeVolume({ id: 11, seriesId: 1, finishedAt: '2026-07-14', pageCount: 200 }),
+        // owned but unread → not counted in tomes/date
+        makeVolume({ id: 12, seriesId: 1, status: 'owned', finishedAt: null }),
+      ],
+      2: [makeVolume({ id: 20, seriesId: 2, finishedAt: '2026-07-02', pageCount: 504 })],
+      3: [makeVolume({ id: 30, seriesId: 3, finishedAt: '2026-07-20' })],
+    };
+
+    expect(recentlyCompleted(series, volumesBySeriesId)).toEqual([
+      {
+        id: 1,
+        title: 'Death Note',
+        type: 'manga',
+        coverUrl: null,
+        completedAt: '2026-07-14',
+        tomes: 2,
+        pages: 390,
+      },
+      {
+        id: 2,
+        title: 'Fondation',
+        type: 'novel',
+        coverUrl: null,
+        completedAt: '2026-07-02',
+        tomes: 1,
+        pages: 504,
+      },
     ]);
   });
 
-  it('drops entries with read === 0', () => {
-    const input = [
-      { title: 'A', read: 3 },
-      { title: 'B', read: 0 },
-      { title: 'C', read: 0 },
-    ];
-    expect(topSeries(input)).toEqual([{ title: 'A', read: 3 }]);
+  it('omits completed series with no dated read volume', () => {
+    const series: Series[] = [makeSeries({ id: 1, status: 'completed' })];
+    const volumesBySeriesId: Record<number, Volume[]> = {
+      1: [makeVolume({ id: 10, seriesId: 1, status: 'read', finishedAt: null })],
+    };
+    expect(recentlyCompleted(series, volumesBySeriesId)).toEqual([]);
   });
 
-  it('respects a custom limit', () => {
-    const input = [
-      { title: 'A', read: 1 },
-      { title: 'B', read: 2 },
-      { title: 'C', read: 3 },
-    ];
-    expect(topSeries(input, 1)).toEqual([{ title: 'C', read: 3 }]);
+  it('respects the limit and keeps the most recent', () => {
+    const series: Series[] = [1, 2, 3].map((id) =>
+      makeSeries({ id, title: `S${id}`, status: 'completed' }),
+    );
+    const volumesBySeriesId: Record<number, Volume[]> = {
+      1: [makeVolume({ id: 10, seriesId: 1, finishedAt: '2026-01-01' })],
+      2: [makeVolume({ id: 20, seriesId: 2, finishedAt: '2026-02-01' })],
+      3: [makeVolume({ id: 30, seriesId: 3, finishedAt: '2026-03-01' })],
+    };
+    const result = recentlyCompleted(series, volumesBySeriesId, 2);
+    expect(result.map((r) => r.title)).toEqual(['S3', 'S2']);
   });
 
-  it('returns an empty array when nothing has been read', () => {
-    expect(topSeries([{ title: 'A', read: 0 }])).toEqual([]);
+  it('returns an empty array when nothing is completed', () => {
+    expect(recentlyCompleted([makeSeries({ status: 'reading' })], {})).toEqual([]);
   });
 });
 

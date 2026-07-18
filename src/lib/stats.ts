@@ -1,31 +1,23 @@
 import { Series, SeriesType, Volume } from '~/src/db/models';
 
-export type Period = 'month' | 'quarter' | 'semester' | 'year';
+/**
+ * Chart windows. Month-based windows show a fixed number of trailing months
+ * (including empty ones); `'all'` collapses the whole history into year bars so
+ * it stays readable no matter how much history there is.
+ */
+export type Period = '3m' | '6m' | 'year' | 'all';
+
+/** Number of trailing month buckets for each month-based period. */
+const MONTH_COUNTS: Record<Exclude<Period, 'all'>, number> = {
+  '3m': 3,
+  '6m': 6,
+  year: 12,
+};
 
 export interface PeriodBucket {
-  key: string; // e.g. '2026-03', '2026-Q1', '2026-S1', '2026'
+  key: string; // month key '2026-03' for month windows, year '2026' for 'all'
   books: number; // number of read volumes finished in that bucket
   pages: number; // sum of pageCount (treat null as 0) for those volumes
-}
-
-/**
- * Derive a period bucket key from an ISO date. Only the leading
- * `YYYY-MM-DD` prefix is used, so full ISO timestamps are accepted too.
- */
-export function periodKey(isoDate: string, period: Period): string {
-  const year = isoDate.slice(0, 4);
-  const month = Number(isoDate.slice(5, 7));
-
-  switch (period) {
-    case 'month':
-      return isoDate.slice(0, 7);
-    case 'quarter':
-      return `${year}-Q${Math.floor((month - 1) / 3) + 1}`;
-    case 'semester':
-      return `${year}-S${month <= 6 ? 1 : 2}`;
-    case 'year':
-      return year;
-  }
 }
 
 /**
@@ -37,23 +29,61 @@ function isRead(volume: Volume): volume is Volume & { finishedAt: string } {
 }
 
 /**
- * Aggregate read volumes into period buckets, sorted ascending by key.
+ * The trailing `count` month keys ending at `now`'s month, oldest first,
+ * e.g. `['2026-01', … , '2026-06']`.
  */
-export function aggregate(volumes: Volume[], period: Period): PeriodBucket[] {
-  const buckets = new Map<string, PeriodBucket>();
+function trailingMonthKeys(now: Date, count: number): string[] {
+  const keys: string[] = [];
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-based
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(year, month - i, 1);
+    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return keys;
+}
 
+/**
+ * Aggregate read volumes into chart buckets. Month windows (`3m`/`6m`/`year`)
+ * return exactly N trailing month buckets, filling gaps with zeros so the axis
+ * stays continuous; `all` returns one bucket per year that has data, ascending.
+ * `now` is injected so callers stay testable.
+ */
+export function aggregate(
+  volumes: Volume[],
+  period: Period,
+  now: Date = new Date(),
+): PeriodBucket[] {
+  if (period === 'all') {
+    const yearly = new Map<string, PeriodBucket>();
+    for (const volume of volumes) {
+      if (!isRead(volume)) {
+        continue;
+      }
+      const key = volume.finishedAt.slice(0, 4);
+      const bucket = yearly.get(key) ?? { key, books: 0, pages: 0 };
+      bucket.books += 1;
+      bucket.pages += volume.pageCount ?? 0;
+      yearly.set(key, bucket);
+    }
+    return Array.from(yearly.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }
+
+  const keys = trailingMonthKeys(now, MONTH_COUNTS[period]);
+  const buckets = new Map<string, PeriodBucket>(
+    keys.map((key) => [key, { key, books: 0, pages: 0 }]),
+  );
   for (const volume of volumes) {
     if (!isRead(volume)) {
       continue;
     }
-    const key = periodKey(volume.finishedAt, period);
-    const bucket = buckets.get(key) ?? { key, books: 0, pages: 0 };
-    bucket.books += 1;
-    bucket.pages += volume.pageCount ?? 0;
-    buckets.set(key, bucket);
+    const bucket = buckets.get(volume.finishedAt.slice(0, 7));
+    if (bucket) {
+      bucket.books += 1;
+      bucket.pages += volume.pageCount ?? 0;
+    }
   }
-
-  return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key));
+  return keys.map((key) => buckets.get(key)!);
 }
 
 /** Count of read volumes with a finishedAt date. */
@@ -89,18 +119,55 @@ export function typeDistribution(series: Series[]): { type: SeriesType; count: n
     .sort((a, b) => b.count - a.count);
 }
 
+export interface CompletedSeries {
+  id: number;
+  title: string;
+  type: SeriesType;
+  coverUrl: string | null;
+  /** Latest finishedAt among the series' read volumes. */
+  completedAt: string;
+  /** Read volume count — the subline for manga/bd/comic. */
+  tomes: number;
+  /** Sum of read pageCount — the subline for novels. */
+  pages: number;
+}
+
 /**
- * Sort precomputed {title, read} entries by read count descending, take the
- * first `limit`, and drop entries with no reads.
+ * Completed series, most recently finished first, limited to `limit`. A series
+ * counts as completed when its status is 'completed'; its completion date is
+ * derived as the latest finishedAt across its read volumes. Completed series
+ * with no dated read volume are omitted, since they can't be placed on the
+ * timeline.
  */
-export function topSeries(
-  input: { title: string; read: number }[],
-  limit = 3,
-): { title: string; read: number }[] {
-  return [...input]
-    .sort((a, b) => b.read - a.read)
-    .slice(0, limit)
-    .filter((entry) => entry.read > 0);
+export function recentlyCompleted(
+  series: Series[],
+  volumesBySeriesId: Record<number, Volume[]>,
+  limit = 5,
+): CompletedSeries[] {
+  const rows: CompletedSeries[] = [];
+  for (const s of series) {
+    if (s.status !== 'completed') {
+      continue;
+    }
+    const read = (volumesBySeriesId[s.id] ?? []).filter(isRead);
+    if (read.length === 0) {
+      continue;
+    }
+    const completedAt = read.reduce(
+      (latest, v) => (v.finishedAt > latest ? v.finishedAt : latest),
+      read[0].finishedAt,
+    );
+    rows.push({
+      id: s.id,
+      title: s.title,
+      type: s.type,
+      coverUrl: s.coverUrl,
+      completedAt,
+      tomes: read.length,
+      pages: read.reduce((sum, v) => sum + (v.pageCount ?? 0), 0),
+    });
+  }
+  return rows.sort((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, limit);
 }
 
 /**

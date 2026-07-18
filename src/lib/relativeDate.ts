@@ -19,6 +19,29 @@ export function shortDate(iso: string): string {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
+// Abbreviated French month names; the short ones (mars, mai, juin, août) carry
+// no trailing period, matching typographic convention.
+const MONTHS_ABBR = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+];
+
+/** `D MMM` (e.g. `14 juil.`) for a stored ISO date, in local time. */
+export function monthDay(iso: string): string {
+  const d = parseStored(iso);
+  return `${d.getDate()} ${MONTHS_ABBR[d.getMonth()]}`;
+}
+
 const DAY_MS = 86_400_000;
 
 /**
