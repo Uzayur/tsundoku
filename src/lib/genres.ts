@@ -11,7 +11,6 @@ const GENRE_FR: Record<string, string> = {
   ecchi: 'Ecchi',
   fantasy: 'Fantasy',
   horror: 'Horreur',
-  'mahou shoujo': 'Magical girl',
   mecha: 'Mecha',
   music: 'Musique',
   mystery: 'Mystère',
@@ -82,6 +81,14 @@ const GENRE_FR: Record<string, string> = {
 export function translateGenre(genre: string): string {
   return GENRE_FR[genre.trim().toLowerCase()] ?? genre;
 }
+
+/**
+ * Every distinct French genre label, sorted, for the manual genre picker. Built
+ * from the translation table so a new genre only has to be added in one place.
+ */
+export const ALL_GENRES: string[] = Array.from(new Set(Object.values(GENRE_FR))).sort((a, b) =>
+  a.localeCompare(b, 'fr'),
+);
 
 /**
  * Turn noisy Open Library `subjects` into a short list of French genre labels,

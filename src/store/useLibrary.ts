@@ -74,6 +74,7 @@ interface LibraryState {
   addSeries: (input: NewSeries) => Promise<number>;
   addBook: (meta: BookMetadata, status?: VolumeStatus, currentPage?: number) => Promise<number>;
   updateSeriesType: (id: number, type: SeriesType) => Promise<void>;
+  setSeriesGenres: (id: number, genres: string[]) => Promise<void>;
   removeSeries: (id: number) => Promise<void>;
   importBackup: (data: BackupData) => Promise<void>;
 }
@@ -368,6 +369,12 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const db = await openDatabase();
     await updateSeries(db, id, { type });
     set({ series: get().series.map((s) => (s.id === id ? { ...s, type } : s)) });
+  },
+
+  setSeriesGenres: async (id, genres) => {
+    const db = await openDatabase();
+    await updateSeries(db, id, { genres });
+    set({ series: get().series.map((s) => (s.id === id ? { ...s, genres } : s)) });
   },
 
   removeSeries: async (id) => {

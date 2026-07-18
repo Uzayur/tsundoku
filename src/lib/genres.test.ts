@@ -1,4 +1,4 @@
-import { subjectsToGenres, translateGenre } from '~/src/lib/genres';
+import { ALL_GENRES, subjectsToGenres, translateGenre } from '~/src/lib/genres';
 
 describe('translateGenre', () => {
   it('translates a known AniList genre', () => {
@@ -40,5 +40,15 @@ describe('subjectsToGenres', () => {
   it('returns an empty array when nothing is recognized', () => {
     expect(subjectsToGenres(['Murder', 'Algeria', 'Accessible book'])).toEqual([]);
     expect(subjectsToGenres([])).toEqual([]);
+  });
+});
+
+describe('ALL_GENRES', () => {
+  it('lists French labels, sorted and deduped', () => {
+    expect(ALL_GENRES).toContain('Science-fiction');
+    expect(ALL_GENRES).toContain('Aventure');
+    // 'crime' and 'mystery & detective' both map to 'Policier' — listed once.
+    expect(ALL_GENRES.filter((g) => g === 'Policier')).toHaveLength(1);
+    expect([...ALL_GENRES]).toEqual([...ALL_GENRES].sort((a, b) => a.localeCompare(b, 'fr')));
   });
 });

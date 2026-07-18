@@ -426,3 +426,24 @@ describe('setVolumePages', () => {
     expect(vol).toMatchObject({ number: 1, pageCount: 300, status: 'read' });
   });
 });
+
+describe('setSeriesGenres', () => {
+  it('replaces the genres and persists them across a reload', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'Fondation', genres: ['sci-fi'] }));
+
+    await useLibrary.getState().setSeriesGenres(seriesId, ['Science-fiction', 'Aventure']);
+
+    expect(useLibrary.getState().series.find((s) => s.id === seriesId)?.genres).toEqual([
+      'Science-fiction',
+      'Aventure',
+    ]);
+
+    await useLibrary.getState().load();
+    expect(useLibrary.getState().series.find((s) => s.id === seriesId)?.genres).toEqual([
+      'Science-fiction',
+      'Aventure',
+    ]);
+  });
+});
