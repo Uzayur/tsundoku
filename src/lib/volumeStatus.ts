@@ -1,4 +1,4 @@
-import { VolumeStatus } from '~/src/db/models';
+import { SeriesStatus, VolumeStatus } from '~/src/db/models';
 import { theme } from '~/src/theme/theme';
 
 export type SlotState = VolumeStatus | 'missing';
@@ -44,6 +44,17 @@ export const STATUS_HERO_COLOR: Record<VolumeStatus, string> = {
   read: STATUS_STYLE.read.fill,
   owned: STATUS_STYLE.owned.fill,
   wishlist: STATUS_STYLE.wishlist.border,
+};
+
+// Series-level counterpart for the multi-tome hero: the series status is coarser
+// than a tome's, so it maps onto the same palette — corail while reading, navy
+// once finished, grey for the not-actively-reading states.
+export const SERIES_STATUS_HERO_COLOR: Record<SeriesStatus, string> = {
+  reading: STATUS_STYLE.reading.border,
+  completed: STATUS_STYLE.read.fill,
+  planned: STATUS_STYLE.wishlist.border,
+  paused: theme.muted,
+  dropped: theme.muted,
 };
 
 // The states shown in the series-detail legend.

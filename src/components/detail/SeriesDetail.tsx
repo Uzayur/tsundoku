@@ -12,18 +12,23 @@ import {
 } from 'react-native';
 
 import { DetailHeader } from '~/src/components/detail/DetailHeader';
-import { SERIES_STATUS_LABEL, TYPE_LABEL, TYPES } from '~/src/components/detail/labels';
-import { Badge } from '~/src/components/ui/Badge';
-import { Cover } from '~/src/components/ui/Cover';
-import { OptionsSheet } from '~/src/components/ui/OptionsSheet';
+import { DetailHero } from '~/src/components/detail/DetailHero';
+import { SERIES_STATUS_LABEL } from '~/src/components/detail/labels';
+import { MetaCard } from '~/src/components/detail/MetaCard';
+import { ProgressSummary } from '~/src/components/detail/ProgressSummary';
+import { SummaryCard } from '~/src/components/detail/SummaryCard';
 import { PagePrompt } from '~/src/components/ui/PagePrompt';
-import { ProgressBar } from '~/src/components/ui/ProgressBar';
 import { VolumeCell } from '~/src/components/ui/VolumeCell';
 import { VolumeSheet } from '~/src/components/ui/VolumeSheet';
 import { Series, Volume } from '~/src/db/models';
-import { translateGenre } from '~/src/lib/genres';
 import { progressFraction, readCount } from '~/src/lib/progress';
-import { LEGEND_STATES, SlotState, STATUS_LABEL, STATUS_STYLE } from '~/src/lib/volumeStatus';
+import {
+  LEGEND_STATES,
+  SERIES_STATUS_HERO_COLOR,
+  SlotState,
+  STATUS_LABEL,
+  STATUS_STYLE,
+} from '~/src/lib/volumeStatus';
 import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
 
@@ -33,7 +38,7 @@ const GRID_GAP = 9;
 // Stable reference: a fresh [] in the selector would never compare equal.
 const NO_VOLUMES: Volume[] = [];
 
-/** Multi-tome detail layout: hero, progress, and the tome grid. */
+/** Multi-tome detail layout: shared hero/meta/progress/summary plus the tome grid. */
 export function SeriesDetail({ series }: { series: Series }) {
   const seriesId = series.id;
   const { width } = useWindowDimensions();
@@ -41,14 +46,14 @@ export function SeriesDetail({ series }: { series: Series }) {
   const volumes = useLibrary((s) => s.volumesBySeriesId[seriesId] ?? NO_VOLUMES);
   const setVolumeState = useLibrary((s) => s.setVolumeState);
   const setVolumeCurrentPage = useLibrary((s) => s.setVolumeCurrentPage);
-  const updateSeriesType = useLibrary((s) => s.updateSeriesType);
+  const setSeriesTotal = useLibrary((s) => s.setSeriesTotal);
+  const setSeriesPagesPerTome = useLibrary((s) => s.setSeriesPagesPerTome);
   const removeSeries = useLibrary((s) => s.removeSeries);
   const pendingPages = useLibrary((s) => s.pendingPages);
   const resolvePendingPages = useLibrary((s) => s.resolvePendingPages);
 
   const [sheetTome, setSheetTome] = useState<number | null>(null);
-  const [typeOpen, setTypeOpen] = useState(false);
-  const [synopsisOpen, setSynopsisOpen] = useState(false);
+  const [pagesOpen, setPagesOpen] = useState(false);
 
   const onDelete = () => {
     Alert.alert('Supprimer la série ?', 'Cette action est irréversible.', [
@@ -67,11 +72,13 @@ export function SeriesDetail({ series }: { series: Series }) {
   const total = series.totalVolumes ?? highestExisting;
   const read = readCount(volumes);
   const ownedCount = volumes.filter((v) => v.status !== 'wishlist').length;
+  const missing = Math.max(0, total - ownedCount);
   const slots = Array.from({ length: total }, (_, i) => i + 1);
   const stateFor = (n: number): SlotState =>
     volumes.find((v) => v.number === n)?.status ?? 'missing';
 
   const cellWidth = (width - theme.screenPadX * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+  const cellHeight = cellWidth / 0.72;
 
   // Either half may be missing depending on what the scan turned up.
   const imprint = [series.publisher, series.publishedYear].filter(Boolean).join(' · ');
@@ -90,61 +97,50 @@ export function SeriesDetail({ series }: { series: Series }) {
     <>
       <DetailHeader onBack={() => router.back()} onDelete={onDelete} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.hero}>
-          <Cover title={series.title} seed={series.id} coverUrl={series.coverUrl} size="lg" />
-          <View style={styles.heroBody}>
-            <Text style={styles.heroTitle}>{series.title}</Text>
-            {series.author ? <Text style={styles.heroAuthor}>{series.author}</Text> : null}
-            <Pressable style={styles.typeRow} onPress={() => setTypeOpen(true)} hitSlop={8}>
-              <Text style={styles.heroType}>{TYPE_LABEL[series.type]}</Text>
-              <Ionicons name="chevron-down" size={14} color={theme.muted} />
-            </Pressable>
-            {imprint ? <Text style={styles.heroImprint}>{imprint}</Text> : null}
-            <View style={styles.badges}>
-              <Badge label={SERIES_STATUS_LABEL[series.status]} tone="reading" />
-              <Badge label={`${ownedCount} possédés`} tone="owned" />
+        <DetailHero
+          title={series.title}
+          author={series.author}
+          coverUrl={series.coverUrl}
+          seed={series.id}
+          statusLabel={SERIES_STATUS_LABEL[series.status]}
+          statusColor={SERIES_STATUS_HERO_COLOR[series.status]}
+          imprint={imprint || undefined}
+        />
+
+        <MetaCard series={series} />
+
+        {series.description ? <SummaryCard description={series.description} /> : null}
+
+        <ProgressSummary
+          value={read}
+          unit={`/ ${total || '?'} tomes lus`}
+          fraction={progressFraction(read, total || null)}
+          footer={
+            <Text style={styles.hint}>
+              {ownedCount} possédés · {missing} manquants
+            </Text>
+          }
+        />
+
+        <Pressable style={styles.perTomeCard} onPress={() => setPagesOpen(true)} hitSlop={4}>
+          <Text style={styles.perTomeKey}>Pages par tome</Text>
+          {series.pagesPerTome != null ? (
+            <View style={styles.perTomeValueRow}>
+              <Text style={styles.perTomeValue}>{series.pagesPerTome}</Text>
+              <Ionicons name="pencil" size={13} color={theme.muted} />
             </View>
-          </View>
+          ) : (
+            <View style={styles.perTomeValueRow}>
+              <Text style={styles.perTomeAdd}>Définir</Text>
+              <Ionicons name="add" size={16} color={theme.accent} />
+            </View>
+          )}
+        </Pressable>
+
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionTitle}>Tomes</Text>
+          <Text style={styles.sectionCap}>Touchez pour ajuster</Text>
         </View>
-
-        {series.genres.length > 0 ? (
-          <View style={styles.genres}>
-            {series.genres.map((genre) => (
-              <Badge key={genre} label={translateGenre(genre)} tone="neutral" />
-            ))}
-          </View>
-        ) : null}
-
-        {series.description ? (
-          <Pressable
-            style={styles.synopsis}
-            onPress={() => setSynopsisOpen((open) => !open)}
-            hitSlop={4}
-          >
-            <Text style={styles.synopsisLabel}>Résumé</Text>
-            <Text style={styles.synopsisText} numberOfLines={synopsisOpen ? undefined : 4}>
-              {series.description}
-            </Text>
-            <Text style={styles.synopsisMore}>{synopsisOpen ? 'Réduire' : 'Lire la suite'}</Text>
-          </Pressable>
-        ) : null}
-
-        <View style={styles.progressCard}>
-          <View>
-            <Text style={styles.progressLabel}>Progression de lecture</Text>
-            <Text style={styles.progressBig}>
-              {read} / {total || '?'}
-            </Text>
-          </View>
-          <View style={styles.progressRight}>
-            <ProgressBar fraction={progressFraction(read, total || null)} />
-            <Text style={styles.progressPct}>
-              {Math.round(progressFraction(read, total || null) * 100)}%
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Tomes</Text>
         <View style={styles.grid}>
           {slots.map((n) => (
             <VolumeCell
@@ -155,6 +151,12 @@ export function SeriesDetail({ series }: { series: Series }) {
               onPress={() => setSheetTome(n)}
             />
           ))}
+          <Pressable
+            style={[styles.addTile, { width: cellWidth, height: cellHeight }]}
+            onPress={() => setSeriesTotal(seriesId, total + 1)}
+          >
+            <Text style={styles.addTileText}>+</Text>
+          </Pressable>
         </View>
 
         <View style={styles.legend}>
@@ -176,7 +178,9 @@ export function SeriesDetail({ series }: { series: Series }) {
           ))}
         </View>
 
-        <Text style={styles.note}>Touche un tome pour choisir son statut.</Text>
+        <Text style={styles.note}>
+          Touchez un tome pour choisir son statut. « + » ajoute le tome suivant.
+        </Text>
       </ScrollView>
 
       <VolumeSheet
@@ -185,23 +189,20 @@ export function SeriesDetail({ series }: { series: Series }) {
         subtitle={sheetSubtitle}
         onClose={() => setSheetTome(null)}
         onSelect={(target) => {
-          if (sheetTome != null) setVolumeState(seriesId, sheetTome, target);
+          const n = sheetTome;
           setSheetTome(null);
+          if (n == null) return;
+          setVolumeState(seriesId, n, target);
+          // Removing the trailing tome also drops its slot (undoing "+"), instead
+          // of leaving an empty cell that can't be taken back.
+          if (target === 'missing' && n === total && series.totalVolumes != null) {
+            setSeriesTotal(seriesId, series.totalVolumes - 1);
+          }
         }}
         onSetPage={(page) => {
           if (sheetTome != null) setVolumeCurrentPage(seriesId, sheetTome, page);
           setSheetTome(null);
         }}
-      />
-
-      <OptionsSheet
-        visible={typeOpen}
-        title="Type de série"
-        onClose={() => setTypeOpen(false)}
-        options={TYPES.map((t) => ({
-          label: TYPE_LABEL[t],
-          onPress: () => updateSeriesType(seriesId, t),
-        }))}
       />
 
       <PagePrompt
@@ -210,50 +211,24 @@ export function SeriesDetail({ series }: { series: Series }) {
         onSubmit={(pages) => resolvePendingPages(pages)}
         onSkip={() => resolvePendingPages(null)}
       />
+
+      <PagePrompt
+        visible={pagesOpen}
+        title="Pages par tome"
+        onSubmit={(pages) => {
+          setSeriesPagesPerTome(seriesId, pages);
+          setPagesOpen(false);
+        }}
+        onSkip={() => setPagesOpen(false)}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: theme.screenPadX, paddingBottom: theme.spacing.xl },
-  hero: { flexDirection: 'row', gap: theme.spacing.md, marginBottom: theme.spacing.md },
-  heroBody: { flex: 1, justifyContent: 'center' },
-  heroTitle: { fontFamily: theme.font.bold, fontSize: 22, color: theme.ink },
-  heroAuthor: { fontFamily: theme.font.medium, fontSize: 13, color: theme.sub, marginTop: 4 },
-  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  heroType: { fontFamily: theme.font.medium, fontSize: 13, color: theme.muted },
-  heroImprint: { fontFamily: theme.font.regular, fontSize: 12, color: theme.sub, marginTop: 4 },
-  badges: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: 10 },
-  genres: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-  },
-  synopsis: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.radiusLg,
-    borderWidth: 1,
-    borderColor: theme.line,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.xs,
-  },
-  synopsisLabel: {
-    fontFamily: theme.font.bold,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: theme.muted,
-    marginBottom: theme.spacing.sm,
-  },
-  synopsisText: { fontFamily: theme.font.regular, fontSize: 13, lineHeight: 20, color: theme.ink },
-  synopsisMore: {
-    fontFamily: theme.font.bold,
-    fontSize: 12,
-    color: theme.accent,
-    marginTop: theme.spacing.sm,
-  },
-  progressCard: {
+  hint: { fontFamily: theme.font.regular, fontSize: 13, color: theme.muted },
+  perTomeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -261,17 +236,20 @@ const styles = StyleSheet.create({
     borderRadius: theme.radiusLg,
     borderWidth: 1,
     borderColor: theme.line,
-    padding: theme.spacing.md,
-    marginTop: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 15,
+    marginBottom: theme.spacing.md,
   },
-  progressLabel: { fontFamily: theme.font.regular, fontSize: 12, color: theme.muted },
-  progressBig: { fontFamily: theme.font.extrabold, fontSize: 26, color: theme.ink, marginTop: 2 },
-  progressRight: { width: 80, gap: 6 },
-  progressPct: {
-    fontFamily: theme.font.bold,
-    fontSize: 12,
-    color: theme.accent,
-    textAlign: 'right',
+  perTomeKey: { fontFamily: theme.font.semibold, fontSize: 13, color: theme.sub },
+  perTomeValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  perTomeValue: { fontFamily: theme.font.bold, fontSize: 14, color: theme.ink },
+  perTomeAdd: { fontFamily: theme.font.bold, fontSize: 13, color: theme.accent },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   sectionTitle: {
     fontFamily: theme.font.bold,
@@ -279,10 +257,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: theme.muted,
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
   },
+  sectionCap: { fontFamily: theme.font.semibold, fontSize: 12, color: theme.sub },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
+  addTile: {
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: theme.accent,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTileText: { fontFamily: theme.font.bold, fontSize: 20, color: theme.accent },
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
