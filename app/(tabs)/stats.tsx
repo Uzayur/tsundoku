@@ -1,5 +1,12 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Cover } from '~/src/components/ui/Cover';
@@ -10,7 +17,7 @@ import { SegmentControl } from '~/src/components/ui/SegmentControl';
 import { SeriesType, Volume } from '~/src/db/models';
 import { monthDay } from '~/src/lib/relativeDate';
 import {
-  aggregate,
+  aggregatePages,
   booksInProgress,
   pagesPerBook,
   Period,
@@ -125,9 +132,30 @@ export default function StatsScreen() {
     [volumesBySeriesId],
   );
 
-  const buckets = useMemo(() => aggregate(allVolumes, period), [allVolumes, period]);
-  const maxBooks = Math.max(1, ...buckets.map((b) => b.books));
-  const windowBooks = buckets.reduce((sum, b) => sum + b.books, 0);
+  // The chart is split into swipeable blocks (oldest page first, current last).
+  const pages = useMemo(() => aggregatePages(allVolumes, period), [allVolumes, period]);
+  // Scale bar heights over the whole history so they stay put while paging.
+  const maxBooks = Math.max(1, ...pages.flat().map((b) => b.books));
+  const chartTotal = pages.reduce((sum, page) => sum + page.reduce((s, b) => s + b.books, 0), 0);
+  // Highlight the current block's newest bar (the last bucket of the last page).
+  const currentKey = pages.at(-1)?.at(-1)?.key;
+
+  const chartScroll = useRef<ScrollView>(null);
+  const [pageWidth, setPageWidth] = useState(0);
+  const [activePage, setActivePage] = useState(0);
+  const windowBooks = (pages[activePage] ?? []).reduce((sum, b) => sum + b.books, 0);
+
+  // Open on the most recent block, and snap back to it whenever the period (and
+  // so the page layout) changes or the width is first measured.
+  useEffect(() => {
+    const last = pages.length - 1;
+    setActivePage(last);
+    if (pageWidth > 0) chartScroll.current?.scrollTo({ x: last * pageWidth, animated: false });
+  }, [pages.length, pageWidth, period]);
+
+  const onPageScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (pageWidth > 0) setActivePage(Math.round(e.nativeEvent.contentOffset.x / pageWidth));
+  };
 
   const distribution = useMemo(() => typeDistribution(series), [series]);
   const totalSeries = distribution.reduce((sum, d) => sum + d.count, 0);
@@ -193,45 +221,57 @@ export default function StatsScreen() {
           <SegmentControl options={PERIOD_OPTIONS} value={period} onChange={setPeriod} size="sm" />
         </View>
         <View style={styles.card}>
-          {windowBooks === 0 ? (
+          {chartTotal === 0 ? (
             <Text style={styles.empty}>Aucune donnée</Text>
           ) : (
-            <>
-              <View style={styles.chart}>
-                {buckets.map((bucket, index) => {
-                  const last = index === buckets.length - 1;
-                  const heightPct = (bucket.books / maxBooks) * 100;
-                  return (
-                    <View key={bucket.key} style={styles.barCol}>
-                      <Text style={[styles.barValue, last && styles.barValueActive]}>
-                        {bucket.books}
-                      </Text>
-                      <View
-                        style={[
-                          styles.bar,
-                          { height: `${Math.max(heightPct, 2)}%` },
-                          last ? styles.barActive : styles.barDefault,
-                        ]}
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-              <View style={styles.labels}>
-                {buckets.map((bucket, index) => {
-                  const last = index === buckets.length - 1;
-                  return (
-                    <Text
-                      key={bucket.key}
-                      style={[styles.barLabel, last && styles.barLabelActive]}
-                      numberOfLines={1}
-                    >
-                      {bucketLabel(bucket.key)}
-                    </Text>
-                  );
-                })}
-              </View>
-            </>
+            <ScrollView
+              ref={chartScroll}
+              horizontal
+              pagingEnabled
+              scrollEnabled={pages.length > 1}
+              showsHorizontalScrollIndicator={false}
+              onLayout={(e) => setPageWidth(e.nativeEvent.layout.width)}
+              onMomentumScrollEnd={onPageScroll}
+            >
+              {pages.map((page, pageIndex) => (
+                <View key={pageIndex} style={{ width: pageWidth }}>
+                  <View style={styles.chart}>
+                    {page.map((bucket) => {
+                      const active = bucket.key === currentKey;
+                      const heightPct = (bucket.books / maxBooks) * 100;
+                      return (
+                        <View key={bucket.key} style={styles.barCol}>
+                          <Text style={[styles.barValue, active && styles.barValueActive]}>
+                            {bucket.books}
+                          </Text>
+                          <View
+                            style={[
+                              styles.bar,
+                              { height: `${Math.max(heightPct, 2)}%` },
+                              active ? styles.barActive : styles.barDefault,
+                            ]}
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.labels}>
+                    {page.map((bucket) => {
+                      const active = bucket.key === currentKey;
+                      return (
+                        <Text
+                          key={bucket.key}
+                          style={[styles.barLabel, active && styles.barLabelActive]}
+                          numberOfLines={1}
+                        >
+                          {bucketLabel(bucket.key)}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
           )}
         </View>
 

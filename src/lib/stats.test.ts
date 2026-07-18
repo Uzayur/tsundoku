@@ -1,6 +1,7 @@
 import { Series, Volume } from '~/src/db/models';
 import {
   aggregate,
+  aggregatePages,
   booksInProgress,
   pagesPerBook,
   recentlyCompleted,
@@ -114,6 +115,48 @@ describe('aggregate', () => {
       makeVolume({ id: 2, status: 'read', finishedAt: null }),
     ];
     expect(aggregate(volumes, 'all', now)).toEqual([]);
+  });
+});
+
+describe('aggregatePages', () => {
+  const now = new Date(2026, 5, 15); // June 2026
+
+  it('returns a single current block when nothing has been read', () => {
+    const pages = aggregatePages([], '3m', now);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].map((b) => b.key)).toEqual(['2026-04', '2026-05', '2026-06']);
+  });
+
+  it('adds older blocks back to the earliest read month, oldest page first', () => {
+    const volumes: Volume[] = [
+      makeVolume({ id: 1, finishedAt: '2026-01-10' }), // 6 months back → needs 2 pages of 3
+      makeVolume({ id: 2, finishedAt: '2026-06-05' }),
+    ];
+
+    const pages = aggregatePages(volumes, '3m', now);
+
+    expect(pages).toHaveLength(2);
+    expect(pages[0].map((b) => b.key)).toEqual(['2026-01', '2026-02', '2026-03']);
+    expect(pages[1].map((b) => b.key)).toEqual(['2026-04', '2026-05', '2026-06']);
+    // The current block stays last so the chart can open on it.
+    expect(pages[1][2]).toMatchObject({ key: '2026-06', books: 1 });
+    expect(pages[0][0]).toMatchObject({ key: '2026-01', books: 1 });
+  });
+
+  it('keeps a read book in the most recent block within a single page', () => {
+    const volumes: Volume[] = [makeVolume({ id: 1, finishedAt: '2026-05-01' })];
+    const pages = aggregatePages(volumes, '3m', now);
+    expect(pages).toHaveLength(1);
+  });
+
+  it('returns the year chart as one page for all', () => {
+    const volumes: Volume[] = [
+      makeVolume({ id: 1, finishedAt: '2024-11-10' }),
+      makeVolume({ id: 2, finishedAt: '2026-01-10' }),
+    ];
+    const pages = aggregatePages(volumes, 'all', now);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].map((b) => b.key)).toEqual(['2024', '2026']);
   });
 });
 

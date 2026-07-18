@@ -69,7 +69,12 @@ export function aggregate(
     return Array.from(yearly.values()).sort((a, b) => a.key.localeCompare(b.key));
   }
 
-  const keys = trailingMonthKeys(now, MONTH_COUNTS[period]);
+  return monthWindow(volumes, now, MONTH_COUNTS[period]);
+}
+
+/** The `count` trailing month buckets ending at `end`'s month, zero-filled. */
+function monthWindow(volumes: Volume[], end: Date, count: number): PeriodBucket[] {
+  const keys = trailingMonthKeys(end, count);
   const buckets = new Map<string, PeriodBucket>(
     keys.map((key) => [key, { key, books: 0, pages: 0 }]),
   );
@@ -84,6 +89,49 @@ export function aggregate(
     }
   }
   return keys.map((key) => buckets.get(key)!);
+}
+
+/**
+ * Split a month-based window into pages of N trailing months so the chart can be
+ * swiped a whole block at a time. Pages run oldest-first, so the last entry is
+ * the current block; there are exactly enough pages to reach the earliest read
+ * month (at least one, all-zero, when nothing has been read). `all` has no blocks
+ * to page through, so it returns its single year-bar chart as one page.
+ */
+export function aggregatePages(
+  volumes: Volume[],
+  period: Period,
+  now: Date = new Date(),
+): PeriodBucket[][] {
+  if (period === 'all') {
+    return [aggregate(volumes, 'all', now)];
+  }
+
+  const size = MONTH_COUNTS[period];
+  let earliest: string | null = null;
+  for (const volume of volumes) {
+    if (!isRead(volume)) {
+      continue;
+    }
+    const month = volume.finishedAt.slice(0, 7);
+    if (earliest === null || month < earliest) {
+      earliest = month;
+    }
+  }
+
+  let pageCount = 1;
+  if (earliest !== null) {
+    const [year, month] = earliest.split('-').map(Number);
+    const span = (now.getFullYear() - year) * 12 + (now.getMonth() + 1 - month) + 1;
+    pageCount = Math.max(1, Math.ceil(span / size));
+  }
+
+  const pages: PeriodBucket[][] = [];
+  for (let page = pageCount - 1; page >= 0; page--) {
+    const end = new Date(now.getFullYear(), now.getMonth() - page * size, 1);
+    pages.push(monthWindow(volumes, end, size));
+  }
+  return pages;
 }
 
 /** Count of read volumes with a finishedAt date. */
