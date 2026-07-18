@@ -25,6 +25,11 @@ import { SlotState } from '~/src/lib/volumeStatus';
 
 const now = () => new Date().toISOString();
 
+// A scanned manga rarely carries a page count in either catalogue, yet its tomes
+// are near-uniform, so a sensible default keeps it out of the "unknown length"
+// warning and lets it count towards the page stats. Romans vary too much to guess.
+const MANGA_DEFAULT_PAGES = 192;
+
 function newVolume(
   seriesId: number,
   number: number,
@@ -64,6 +69,7 @@ interface LibraryState {
     applyToPrevious?: boolean,
   ) => Promise<void>;
   setVolumeCurrentPage: (seriesId: number, number: number, page: number) => Promise<void>;
+  setVolumePages: (seriesId: number, number: number, pages: number) => Promise<void>;
   search: (query: string) => Promise<void>;
   addSeries: (input: NewSeries) => Promise<number>;
   addBook: (meta: BookMetadata, status?: VolumeStatus, currentPage?: number) => Promise<number>;
@@ -187,6 +193,26 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: volumes } });
   },
 
+  // Set (or correct) a tome's page count directly, e.g. from the book's page when
+  // no source knew its length or catalogued the wrong one. A book added by title
+  // search carries no volume row yet, so entering a length creates one — marked
+  // owned, since the book is in the library but not read.
+  setVolumePages: async (seriesId, number, pages) => {
+    const db = await openDatabase();
+    let volumes = [...(get().volumesBySeriesId[seriesId] ?? [])];
+    const existing = volumes.find((v) => v.number === number);
+    if (existing) {
+      await setVolumePageCount(db, existing.id, pages);
+      volumes = volumes.map((v) => (v.id === existing.id ? { ...v, pageCount: pages } : v));
+    } else {
+      const draft = newVolume(seriesId, number, 'owned', pages);
+      const id = await insertVolume(db, draft);
+      volumes = [...volumes, { ...draft, id }];
+    }
+    volumes.sort((a, b) => a.number - b.number);
+    set({ volumesBySeriesId: { ...get().volumesBySeriesId, [seriesId]: volumes } });
+  },
+
   search: async (query) => {
     const q = query.trim();
     if (!q) {
@@ -246,6 +272,9 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     //    rather than standing up a duplicate alongside it.
     const existingSeries = get().series.find((s) => normalizeTitle(s.title) === key);
     let seriesId = existingSeries?.id ?? null;
+    // Track the resolved type so a page-less manga can fall back to a default
+    // length. Defaults to 'novel', matching the untyped-scan fallback below.
+    let seriesType: SeriesType = existingSeries?.type ?? 'novel';
 
     // Series created before this metadata existed (or scanned back when we only
     // kept page counts) carry empty genres and no synopsis. A rescan is the
@@ -273,6 +302,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         candidate = undefined;
       }
       if (candidate) {
+        seriesType = candidate.series.type;
         seriesId = await insertSeries(db, {
           ...candidate.series,
           description: candidate.description,
@@ -304,10 +334,14 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
     const existing = (get().volumesBySeriesId[seriesId] ?? []).find(
       (v) => v.number === volumeNumber,
     );
+    const mangaDefault = seriesType === 'manga' ? MANGA_DEFAULT_PAGES : null;
     if (existing) {
       // The tome is already tracked: the scan contributes its real length, and
-      // the status the user just chose overrides whatever it held before.
-      await setVolumePageCount(db, existing.id, meta.pageCount);
+      // the status the user just chose overrides whatever it held before. Keep
+      // any length already known when neither the scan nor the manga default has
+      // one, rather than blanking it.
+      const pages = meta.pageCount ?? existing.pageCount ?? mangaDefault;
+      await setVolumePageCount(db, existing.id, pages);
       await setVolumeStatus(db, existing.id, status);
       await setVolumeFinishedAt(db, existing.id, status === 'read' ? now() : null);
       if (currentPage != null) await setVolumeCurrentPage(db, existing.id, currentPage);
@@ -317,7 +351,7 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
         number: volumeNumber,
         isbn: meta.isbn,
         title: meta.title,
-        pageCount: meta.pageCount,
+        pageCount: meta.pageCount ?? mangaDefault,
         coverUrl: meta.coverUrl,
         status,
         currentPage: currentPage ?? null,

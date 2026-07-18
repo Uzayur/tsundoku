@@ -58,6 +58,7 @@ export default function SeriesDetailScreen() {
   const volumes = useLibrary((s) => s.volumesBySeriesId[seriesId] ?? NO_VOLUMES);
   const setVolumeState = useLibrary((s) => s.setVolumeState);
   const setVolumeCurrentPage = useLibrary((s) => s.setVolumeCurrentPage);
+  const setVolumePages = useLibrary((s) => s.setVolumePages);
   const updateSeriesType = useLibrary((s) => s.updateSeriesType);
   const removeSeries = useLibrary((s) => s.removeSeries);
   const pendingPages = useLibrary((s) => s.pendingPages);
@@ -66,6 +67,7 @@ export default function SeriesDetailScreen() {
   const [sheetTome, setSheetTome] = useState<number | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
   const [synopsisOpen, setSynopsisOpen] = useState(false);
+  const [editingPages, setEditingPages] = useState(false);
 
   const onDelete = () => {
     Alert.alert('Supprimer la série ?', 'Cette action est irréversible.', [
@@ -102,9 +104,11 @@ export default function SeriesDetailScreen() {
   // Either half may be missing depending on what the scan turned up.
   const imprint = [series.publisher, series.publishedYear].filter(Boolean).join(' · ');
 
-  // Single-tome works (e.g. romans) track pages, not tomes.
-  const singleVolume = total === 1;
+  // Single books (romans, one-shots) track pages, not a tome grid. A roman
+  // counts even when AniList never knew its volume total (total 0 on a fresh
+  // import), so it still gets the page card and the editable page count.
   const isNovel = series.type === 'novel';
+  const singleVolume = isNovel ? total <= 1 : total === 1;
   const vol1 = volumes.find((v) => v.number === 1);
   const pageTotal = vol1?.pageCount ?? null;
   const currentPage = vol1?.status === 'read' && pageTotal ? pageTotal : (vol1?.currentPage ?? 0);
@@ -173,6 +177,26 @@ export default function SeriesDetailScreen() {
             </Text>
             <Text style={styles.synopsisMore}>{synopsisOpen ? 'Réduire' : 'Lire la suite'}</Text>
           </Pressable>
+        ) : null}
+
+        {singleVolume ? (
+          <View style={styles.infoCard}>
+            <Text style={styles.infoLabel}>Informations</Text>
+            <Pressable style={styles.infoRow} onPress={() => setEditingPages(true)} hitSlop={6}>
+              <Text style={styles.infoKey}>Pages</Text>
+              {pageTotal ? (
+                <View style={styles.infoValueRow}>
+                  <Text style={styles.infoValue}>{pageTotal}</Text>
+                  <Ionicons name="pencil" size={13} color={theme.muted} />
+                </View>
+              ) : (
+                <View style={styles.infoValueRow}>
+                  <Text style={styles.infoAdd}>Ajouter</Text>
+                  <Ionicons name="add" size={16} color={theme.accent} />
+                </View>
+              )}
+            </Pressable>
+          </View>
         ) : null}
 
         {singleVolume ? (
@@ -280,6 +304,16 @@ export default function SeriesDetailScreen() {
         onSubmit={(pages) => resolvePendingPages(pages)}
         onSkip={() => resolvePendingPages(null)}
       />
+
+      <PagePrompt
+        visible={editingPages}
+        title={series.title}
+        onSubmit={(pages) => {
+          setVolumePages(seriesId, 1, pages);
+          setEditingPages(false);
+        }}
+        onSkip={() => setEditingPages(false)}
+      />
     </View>
   );
 }
@@ -343,6 +377,27 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   synopsisText: { fontFamily: theme.font.regular, fontSize: 13, lineHeight: 20, color: theme.ink },
+  infoCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.radiusLg,
+    borderWidth: 1,
+    borderColor: theme.line,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
+  },
+  infoLabel: {
+    fontFamily: theme.font.bold,
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: theme.muted,
+    marginBottom: theme.spacing.sm,
+  },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  infoKey: { fontFamily: theme.font.regular, fontSize: 13, color: theme.sub },
+  infoValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  infoValue: { fontFamily: theme.font.bold, fontSize: 13, color: theme.ink },
+  infoAdd: { fontFamily: theme.font.bold, fontSize: 13, color: theme.accent },
   synopsisMore: {
     fontFamily: theme.font.bold,
     fontSize: 12,

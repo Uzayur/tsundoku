@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BookMetadata, lookupIsbn } from '~/src/api/isbn';
@@ -67,13 +67,27 @@ export default function ScanScreen() {
     if (!preview) return;
     const meta = preview;
     const label = meta.title ?? meta.isbn;
+    const { number } = parseVolumeTitle(meta.title ?? meta.isbn);
     // Close the sheet and return to the scanner right away; the write and its
     // DB reload finish in the background so the modal never lingers.
     rearm();
     if (addedTimer.current) clearTimeout(addedTimer.current);
     setAdded(label);
     addedTimer.current = setTimeout(() => setAdded(null), 1800);
-    void addBook(meta, status, currentPage);
+    // addBook fills a manga's length with a default; if the saved tome still has
+    // none (a roman or other type no catalogue sized), warn so it can be added
+    // from the book's page rather than silently counting as zero pages.
+    void addBook(meta, status, currentPage).then((seriesId) => {
+      const saved = (useLibrary.getState().volumesBySeriesId[seriesId] ?? []).find(
+        (v) => v.number === (number ?? 1),
+      );
+      if (saved && saved.pageCount == null) {
+        Alert.alert(
+          'Nombre de pages inconnu',
+          `« ${label} » a été ajouté, mais son nombre de pages est introuvable. Vous pourrez le renseigner depuis la fiche du livre.`,
+        );
+      }
+    });
   };
 
   const onSelect = (target: SlotState) => {

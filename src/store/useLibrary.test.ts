@@ -369,4 +369,60 @@ describe('addBook', () => {
     expect(volumesOf(seriesId)).toHaveLength(1);
     expect(volumesOf(seriesId)[0]).toMatchObject({ number: 3, pageCount: 200 });
   });
+
+  it('defaults a page-less manga tome to a standard length', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'One Piece' }));
+
+    await useLibrary.getState().addBook(meta({ pageCount: null }));
+
+    expect(volumesOf(seriesId)[0]).toMatchObject({ number: 3, pageCount: 192 });
+  });
+
+  it('keeps a real page count over the manga default', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'One Piece' }));
+
+    await useLibrary.getState().addBook(meta({ pageCount: 210 }));
+
+    expect(volumesOf(seriesId)[0]).toMatchObject({ pageCount: 210 });
+  });
+
+  it('leaves a page-less roman without a length so the scan can flag it', async () => {
+    jest.mocked(fetchSeries).mockResolvedValue([]);
+
+    const seriesId = await useLibrary
+      .getState()
+      .addBook(meta({ title: 'Le Nom du vent', pageCount: null }));
+
+    expect(volumesOf(seriesId)[0]).toMatchObject({ number: 1, pageCount: null });
+  });
+});
+
+describe('setVolumePages', () => {
+  it('creates an owned volume to hold the length when the book has none yet', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'Fondation', type: 'novel', totalVolumes: 1 }));
+
+    await useLibrary.getState().setVolumePages(seriesId, 1, 250);
+
+    const vols = useLibrary.getState().volumesBySeriesId[seriesId];
+    expect(vols).toHaveLength(1);
+    expect(vols[0]).toMatchObject({ number: 1, pageCount: 250, status: 'owned' });
+  });
+
+  it('corrects the length on an existing volume without changing its status', async () => {
+    const seriesId = await useLibrary
+      .getState()
+      .addSeries(makeSeries({ id: 0, title: 'Fondation', type: 'novel', totalVolumes: 1 }));
+    await useLibrary.getState().setVolumeState(seriesId, 1, 'read');
+
+    await useLibrary.getState().setVolumePages(seriesId, 1, 300);
+
+    const vol = useLibrary.getState().volumesBySeriesId[seriesId][0];
+    expect(vol).toMatchObject({ number: 1, pageCount: 300, status: 'read' });
+  });
 });

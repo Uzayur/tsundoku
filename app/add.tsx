@@ -86,7 +86,22 @@ export default function AddScreen() {
 
   const onImport = async (result: SeriesSearchResult) => {
     const id = await addSeries({ ...result.series, description: result.description });
-    router.replace({ pathname: '/series/[id]', params: { id } });
+    const goToBook = () => router.replace({ pathname: '/series/[id]', params: { id } });
+
+    // The search/import path pulls only AniList series data — it never resolves a
+    // page count. For a single book (roman) that count drives the reading-progress
+    // bar, so warn that it's missing; the user can fill it in from the book's page.
+    // Multi-tome series have no single page count, so they import silently.
+    const singleBook = result.series.type === 'novel' || result.series.totalVolumes === 1;
+    if (singleBook) {
+      Alert.alert(
+        'Nombre de pages inconnu',
+        "L'ajout par recherche ne récupère pas le nombre de pages. Vous pourrez le renseigner depuis la fiche du livre.",
+        [{ text: 'Compris', onPress: goToBook }],
+      );
+    } else {
+      goToBook();
+    }
   };
 
   return (

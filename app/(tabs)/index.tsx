@@ -6,34 +6,33 @@ import { Screen } from '~/src/components/ui/Screen';
 import { ScreenHeader } from '~/src/components/ui/ScreenHeader';
 import { SectionTitle } from '~/src/components/ui/SectionTitle';
 import { StatCard } from '~/src/components/ui/StatCard';
-import { Series, SeriesType, Volume } from '~/src/db/models';
+import { Series, Volume } from '~/src/db/models';
 import { progressFraction, readCount } from '~/src/lib/progress';
 import { recentlyAdded, recentlyRead } from '~/src/lib/recent';
 import { relativeDate } from '~/src/lib/relativeDate';
 import { totalBooksRead, totalPagesRead } from '~/src/lib/stats';
+import { STATUS_LABEL } from '~/src/lib/volumeStatus';
 import { useLibrary } from '~/src/store/useLibrary';
 import { theme } from '~/src/theme/theme';
 
-const TYPE_LABELS: Record<SeriesType, string> = {
-  manga: 'Manga',
-  novel: 'Roman',
-  bd: 'BD',
-  comic: 'Comics',
-};
-
-function typeLabel(type: SeriesType): string {
-  return TYPE_LABELS[type];
-}
-
 function subtitleFor(item: Series): string {
-  return item.author ? `${item.author} · ${typeLabel(item.type)}` : typeLabel(item.type);
+  return item.author ?? '';
 }
 
 /**
- * Left side of the progress bar: tomes read out of the total, or a bare count
- * when the series has no known total.
+ * Left side of the progress bar. Single-volume works (romans, one-shots) track
+ * reading progress rather than a tome count, so they never read "Tome 1 / 1".
+ * Multi-tome series show tomes read out of the total, or a bare count when the
+ * total is unknown.
  */
-function progressLeft(item: Series, read: number): string {
+function progressLeft(item: Series, volumes: Volume[], read: number): string {
+  if (item.totalVolumes === 1) {
+    const vol = volumes.find((v) => v.number === 1);
+    if (!vol) return STATUS_LABEL.missing;
+    if (vol.pageCount && vol.currentPage) return `page ${vol.currentPage} / ${vol.pageCount}`;
+    if (vol.currentPage) return `page ${vol.currentPage}`;
+    return STATUS_LABEL[vol.status];
+  }
   return item.totalVolumes ? `Tome ${read} / ${item.totalVolumes}` : `${read} tomes lus`;
 }
 
@@ -61,7 +60,7 @@ export default function AccueilScreen() {
         onPress={() => goToSeries(item.id)}
         progress={{
           fraction: progressFraction(count, item.totalVolumes),
-          left: progressLeft(item, count),
+          left: progressLeft(item, volumes, count),
           right,
         }}
       />
